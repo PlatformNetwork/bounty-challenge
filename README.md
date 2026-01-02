@@ -11,7 +11,7 @@
 [![Rust](https://img.shields.io/badge/rust-1.70+-orange.svg)](https://www.rust-lang.org/)
 [![Bittensor](https://img.shields.io/badge/bittensor-subnet-green.svg)](https://bittensor.com/)
 
-![Bounty Challenge Banner](assets/banner.svg)
+![Bounty Challenge Banner](assets/banner.jpg)
 
 </div>
 
