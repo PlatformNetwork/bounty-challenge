@@ -1,7 +1,7 @@
 //! Register command - link GitHub account via Device Flow
 
-use anyhow::{Context, Result};
 use crate::style::*;
+use anyhow::{Context, Result};
 
 pub async fn run(rpc: &str, hotkey: &str) -> Result<()> {
     print_header("GitHub Registration");
@@ -12,7 +12,7 @@ pub async fn run(rpc: &str, hotkey: &str) -> Result<()> {
         return Ok(());
     }
 
-    println!("Hotkey: {}...{}", &hotkey[..8], &hotkey[hotkey.len()-4..]);
+    println!("Hotkey: {}...{}", &hotkey[..8], &hotkey[hotkey.len() - 4..]);
     println!();
 
     // Initialize GitHub Device Auth
@@ -30,9 +30,15 @@ pub async fn run(rpc: &str, hotkey: &str) -> Result<()> {
     println!("│                                                         │");
     println!("│  To link your GitHub account:                          │");
     println!("│                                                         │");
-    println!("│  1. Go to: {}       │", style_cyan(&device_code.verification_uri));
+    println!(
+        "│  1. Go to: {}       │",
+        style_cyan(&device_code.verification_uri)
+    );
     println!("│                                                         │");
-    println!("│  2. Enter code: {}                              │", style_bold(&device_code.user_code));
+    println!(
+        "│  2. Enter code: {}                              │",
+        style_bold(&device_code.user_code)
+    );
     println!("│                                                         │");
     println!("│  3. Authorize the application                          │");
     println!("│                                                         │");
@@ -72,7 +78,7 @@ pub async fn run(rpc: &str, hotkey: &str) -> Result<()> {
     });
 
     let response = client
-        .post(&format!("{}/evaluate", rpc))
+        .post(format!("{}/evaluate", rpc))
         .json(&request)
         .send()
         .await
@@ -84,11 +90,20 @@ pub async fn run(rpc: &str, hotkey: &str) -> Result<()> {
         println!();
         print_success("Registration complete!");
         println!();
-        println!("Your GitHub account @{} is now linked to your hotkey.", style_cyan(&user.login));
+        println!(
+            "Your GitHub account @{} is now linked to your hotkey.",
+            style_cyan(&user.login)
+        );
         println!();
         println!("Next steps:");
-        println!("  1. Create issues on {}", style_cyan("https://github.com/CortexLM/fabric/issues"));
-        println!("  2. Wait for maintainers to validate with '{}' label", style_green("valid"));
+        println!(
+            "  1. Create issues on {}",
+            style_cyan("https://github.com/CortexLM/fabric/issues")
+        );
+        println!(
+            "  2. Wait for maintainers to validate with '{}' label",
+            style_green("valid")
+        );
         println!("  3. Bounties are credited automatically!");
         println!();
         println!("Check your status anytime:");

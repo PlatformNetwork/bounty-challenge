@@ -10,15 +10,15 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
-use serde::Serialize;
+
 use tower_http::cors::CorsLayer;
 use tracing::{error, info};
 
 use crate::challenge::BountyChallenge;
 use crate::storage::BountyStorage;
 use platform_challenge_sdk::server::{
-    EvaluationRequest, EvaluationResponse, HealthResponse, ValidationRequest, ValidationResponse,
-    ServerChallenge,
+    EvaluationRequest, EvaluationResponse, HealthResponse, ServerChallenge, ValidationRequest,
+    ValidationResponse,
 };
 
 pub struct AppState {
@@ -110,7 +110,7 @@ pub async fn run_server(
 
     let app = create_router(state);
     let addr = format!("{}:{}", host, port);
-    
+
     info!("Starting Bounty Challenge server on {}", addr);
 
     let listener = tokio::net::TcpListener::bind(&addr).await?;

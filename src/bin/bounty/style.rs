@@ -1,7 +1,5 @@
 //! Terminal styling utilities
 
-use std::io::Write;
-
 pub fn style_cyan(s: &str) -> String {
     format!("\x1b[36m{}\x1b[0m", s)
 }

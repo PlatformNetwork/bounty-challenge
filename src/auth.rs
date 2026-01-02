@@ -40,7 +40,10 @@ pub fn verify_signature(hotkey: &str, message: &str, signature_hex: &str) -> boo
     };
 
     if sig_bytes.len() != 64 {
-        debug!("Invalid signature length: {} (expected 64)", sig_bytes.len());
+        debug!(
+            "Invalid signature length: {} (expected 64)",
+            sig_bytes.len()
+        );
         return false;
     }
 

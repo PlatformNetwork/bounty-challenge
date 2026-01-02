@@ -28,6 +28,7 @@ pub struct DeviceCodeResponse {
 
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
+#[allow(dead_code)]
 enum TokenResponse {
     Success {
         access_token: String,
@@ -109,7 +110,10 @@ impl GitHubDeviceAuth {
                 .form(&[
                     ("client_id", &self.client_id),
                     ("device_code", &device_code.device_code),
-                    ("grant_type", &"urn:ietf:params:oauth:grant-type:device_code".to_string()),
+                    (
+                        "grant_type",
+                        &"urn:ietf:params:oauth:grant-type:device_code".to_string(),
+                    ),
                 ])
                 .send()
                 .await?;
@@ -120,28 +124,26 @@ impl GitHubDeviceAuth {
                 TokenResponse::Success { access_token, .. } => {
                     return Ok(access_token);
                 }
-                TokenResponse::Pending { error, .. } => {
-                    match error.as_str() {
-                        "authorization_pending" => {
-                            debug!("Waiting for user authorization...");
-                            continue;
-                        }
-                        "slow_down" => {
-                            debug!("Rate limited, slowing down");
-                            tokio::time::sleep(Duration::from_secs(5)).await;
-                            continue;
-                        }
-                        "expired_token" => {
-                            anyhow::bail!("Device code expired. Please try again.");
-                        }
-                        "access_denied" => {
-                            anyhow::bail!("Access denied by user.");
-                        }
-                        _ => {
-                            anyhow::bail!("GitHub error: {}", error);
-                        }
+                TokenResponse::Pending { error, .. } => match error.as_str() {
+                    "authorization_pending" => {
+                        debug!("Waiting for user authorization...");
+                        continue;
                     }
-                }
+                    "slow_down" => {
+                        debug!("Rate limited, slowing down");
+                        tokio::time::sleep(Duration::from_secs(5)).await;
+                        continue;
+                    }
+                    "expired_token" => {
+                        anyhow::bail!("Device code expired. Please try again.");
+                    }
+                    "access_denied" => {
+                        anyhow::bail!("Access denied by user.");
+                    }
+                    _ => {
+                        anyhow::bail!("GitHub error: {}", error);
+                    }
+                },
             }
         }
     }
@@ -176,12 +178,12 @@ impl GitHubDeviceAuth {
     /// Complete flow: request code, wait for auth, get user
     pub async fn authenticate_interactive(&self) -> Result<(GitHubUser, DeviceCodeResponse)> {
         let device_code = self.request_device_code().await?;
-        
+
         // Return device code so caller can display instructions
         // Then poll for token
         let access_token = self.poll_for_token(&device_code).await?;
         let user = self.get_user(&access_token).await?;
-        
+
         Ok((user, device_code))
     }
 }

@@ -333,10 +333,7 @@ impl ServerChallenge for BountyChallenge {
                 },
                 "required": ["github_username"]
             })),
-            features: vec![
-                "github-verification".to_string(),
-                "anti-abuse".to_string(),
-            ],
+            features: vec!["github-verification".to_string(), "anti-abuse".to_string()],
             limits: ConfigLimits {
                 max_submission_size: Some(10 * 1024),
                 max_evaluation_time: Some(60),

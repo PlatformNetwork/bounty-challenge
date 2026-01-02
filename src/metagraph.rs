@@ -7,7 +7,7 @@ use serde::Deserialize;
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
 const CACHE_REFRESH_INTERVAL: Duration = Duration::from_secs(60);
 
@@ -42,7 +42,7 @@ impl MetagraphCache {
     pub fn is_registered(&self, hotkey: &str) -> bool {
         let hotkeys = self.hotkeys.read();
         let normalized = hotkey.to_lowercase();
-        
+
         if hotkeys.contains(&normalized) {
             return true;
         }
@@ -78,7 +78,10 @@ impl MetagraphCache {
             .map_err(|e| format!("Failed to connect to Platform Server: {}", e))?;
 
         if !response.status().is_success() {
-            return Err(format!("Platform Server returned error: {}", response.status()));
+            return Err(format!(
+                "Platform Server returned error: {}",
+                response.status()
+            ));
         }
 
         let miners: Vec<MinerInfo> = response

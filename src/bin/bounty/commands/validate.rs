@@ -1,15 +1,14 @@
 //! Validate command - run as validator
 
-use anyhow::Result;
 use crate::style::*;
-use tracing::info;
+use anyhow::Result;
 
 pub async fn run(platform_url: &str, hotkey: Option<String>) -> Result<()> {
     print_header("Validator Mode");
 
     println!("Platform:  {}", platform_url);
     if let Some(ref hk) = hotkey {
-        println!("Hotkey:    {}...{}", &hk[..8], &hk[hk.len()-4..]);
+        println!("Hotkey:    {}...{}", &hk[..8], &hk[hk.len() - 4..]);
     }
     println!();
 
@@ -23,7 +22,7 @@ pub async fn run(platform_url: &str, hotkey: Option<String>) -> Result<()> {
 
     print_info("Checking Platform Server connectivity...");
 
-    match client.get(&format!("{}/health", platform_url)).send().await {
+    match client.get(format!("{}/health", platform_url)).send().await {
         Ok(response) if response.status().is_success() => {
             print_success("Platform Server is reachable");
         }
@@ -38,13 +37,13 @@ pub async fn run(platform_url: &str, hotkey: Option<String>) -> Result<()> {
     // Check metagraph registration
     if let Some(hotkey) = hotkey {
         print_info("Checking metagraph registration...");
-        
+
         let metagraph = bounty_challenge::metagraph::MetagraphCache::new(platform_url.to_string());
-        
+
         match metagraph.refresh().await {
             Ok(count) => {
                 print_success(&format!("Loaded {} miners from metagraph", count));
-                
+
                 if metagraph.is_registered(&hotkey) {
                     print_success("Your hotkey is registered on the subnet");
                 } else {

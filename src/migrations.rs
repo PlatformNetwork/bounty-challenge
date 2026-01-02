@@ -72,7 +72,7 @@ impl Migrator {
 
     fn load_migrations(&self) -> Result<Vec<Migration>> {
         let dir = Path::new(self.migrations_dir);
-        
+
         if !dir.exists() {
             return Ok(vec![]);
         }
@@ -138,7 +138,9 @@ mod tests {
         migrator.run(&conn).unwrap();
 
         let count: i64 = conn
-            .query_row("SELECT COUNT(*) FROM schema_migrations", [], |row| row.get(0))
+            .query_row("SELECT COUNT(*) FROM schema_migrations", [], |row| {
+                row.get(0)
+            })
             .unwrap();
         assert!(count >= 1);
     }

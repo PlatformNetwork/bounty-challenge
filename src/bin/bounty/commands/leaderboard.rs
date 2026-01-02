@@ -1,7 +1,7 @@
 //! Leaderboard command
 
-use anyhow::{Context, Result};
 use crate::style::*;
+use anyhow::{Context, Result};
 
 pub async fn run(rpc: &str, limit: usize) -> Result<()> {
     print_header("Bounty Challenge Leaderboard");
@@ -9,7 +9,7 @@ pub async fn run(rpc: &str, limit: usize) -> Result<()> {
     let client = reqwest::Client::new();
 
     let response = client
-        .get(&format!("{}/leaderboard", rpc))
+        .get(format!("{}/leaderboard", rpc))
         .send()
         .await
         .context("Failed to connect to server")?;
@@ -31,8 +31,8 @@ pub async fn run(rpc: &str, limit: usize) -> Result<()> {
 
         println!();
         println!(
-            "{:>4}  {:<18}  {:>12}  {:>8}  {}",
-            "Rank", "GitHub", "Valid Issues", "Score", "Hotkey"
+            "{:>4}  {:<18}  {:>12}  {:>8}  Hotkey",
+            "Rank", "GitHub", "Valid Issues", "Score"
         );
         println!("{}", "─".repeat(75));
 

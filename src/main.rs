@@ -33,14 +33,9 @@ async fn main() -> anyhow::Result<()> {
 
     // Build and run server
     let config = ServerConfig::from_env();
-    info!(
-        "Server will listen on {}:{}",
-        config.host, config.port
-    );
+    info!("Server will listen on {}:{}", config.host, config.port);
 
-    let server = ChallengeServer::builder(challenge)
-        .config(config)
-        .build();
+    let server = ChallengeServer::builder(challenge).config(config).build();
 
     server.run().await?;
 

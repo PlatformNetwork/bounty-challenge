@@ -66,7 +66,11 @@ enum Commands {
     #[command(visible_alias = "v")]
     Validate {
         /// Platform server URL
-        #[arg(long, env = "PLATFORM_URL", default_value = "https://chain.platform.network")]
+        #[arg(
+            long,
+            env = "PLATFORM_URL",
+            default_value = "https://chain.platform.network"
+        )]
         platform: String,
 
         /// Validator hotkey
@@ -106,9 +110,7 @@ async fn main() {
     let cli = Cli::parse();
 
     if cli.verbose {
-        tracing_subscriber::fmt()
-            .with_env_filter("info")
-            .init();
+        tracing_subscriber::fmt().with_env_filter("info").init();
     }
 
     let result = match cli.command {
@@ -116,21 +118,11 @@ async fn main() {
             print_banner();
             commands::server::run(&host, port, &db).await
         }
-        Commands::Validate { platform, hotkey } => {
-            commands::validate::run(&platform, hotkey).await
-        }
-        Commands::Register { hotkey } => {
-            commands::register::run(&cli.rpc, &hotkey).await
-        }
-        Commands::Leaderboard { limit } => {
-            commands::leaderboard::run(&cli.rpc, limit).await
-        }
-        Commands::Status { hotkey } => {
-            commands::status::run(&cli.rpc, &hotkey).await
-        }
-        Commands::Config => {
-            commands::config::run(&cli.rpc).await
-        }
+        Commands::Validate { platform, hotkey } => commands::validate::run(&platform, hotkey).await,
+        Commands::Register { hotkey } => commands::register::run(&cli.rpc, &hotkey).await,
+        Commands::Leaderboard { limit } => commands::leaderboard::run(&cli.rpc, limit).await,
+        Commands::Status { hotkey } => commands::status::run(&cli.rpc, &hotkey).await,
+        Commands::Config => commands::config::run(&cli.rpc).await,
     };
 
     if let Err(e) = result {

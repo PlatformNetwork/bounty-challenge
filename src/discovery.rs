@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use tokio::time::interval;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info};
 
 use crate::github::GitHubClient;
 use crate::storage::{BountyStorage, ValidatedBounty};
@@ -36,7 +36,7 @@ impl BountyDiscovery {
 
         loop {
             ticker.tick().await;
-            
+
             if let Err(e) = self.scan_and_credit().await {
                 error!("Discovery scan failed: {}", e);
             }
@@ -50,8 +50,10 @@ impl BountyDiscovery {
         let since = self.last_scan;
         let issues = self.github.get_closed_issues_with_valid(since).await?;
 
-        let mut result = ScanResult::default();
-        result.total_found = issues.len();
+        let mut result = ScanResult {
+            total_found: issues.len(),
+            ..Default::default()
+        };
 
         for issue in issues {
             // Check if already credited
@@ -63,7 +65,7 @@ impl BountyDiscovery {
 
             // Find miner with matching GitHub username
             let github_user = issue.user.login.to_lowercase();
-            
+
             match self.storage.get_hotkey_by_github(&github_user)? {
                 Some(hotkey) => {
                     // Auto-credit the bounty
@@ -76,10 +78,12 @@ impl BountyDiscovery {
                     };
 
                     self.storage.record_bounty(&bounty)?;
-                    
+
                     info!(
                         "Auto-credited issue #{} to {} ({})",
-                        issue.number, &hotkey[..16], issue.user.login
+                        issue.number,
+                        &hotkey[..16],
+                        issue.user.login
                     );
                     result.newly_credited += 1;
                 }

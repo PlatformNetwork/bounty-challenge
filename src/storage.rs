@@ -65,9 +65,8 @@ impl BountyStorage {
 
     pub fn get_github_username(&self, hotkey: &str) -> Result<Option<String>> {
         let conn = self.conn.lock().unwrap();
-        let mut stmt = conn.prepare(
-            "SELECT github_username FROM miner_registrations WHERE miner_hotkey = ?1",
-        )?;
+        let mut stmt = conn
+            .prepare("SELECT github_username FROM miner_registrations WHERE miner_hotkey = ?1")?;
         let result = stmt.query_row(params![hotkey], |row| row.get(0)).ok();
         Ok(result)
     }
@@ -77,7 +76,9 @@ impl BountyStorage {
         let mut stmt = conn.prepare(
             "SELECT miner_hotkey FROM miner_registrations WHERE LOWER(github_username) = LOWER(?1)",
         )?;
-        let result = stmt.query_row(params![github_username], |row| row.get(0)).ok();
+        let result = stmt
+            .query_row(params![github_username], |row| row.get(0))
+            .ok();
         Ok(result)
     }
 
@@ -163,11 +164,9 @@ impl BountyStorage {
 
     pub fn get_total_bounties(&self) -> Result<u32> {
         let conn = self.conn.lock().unwrap();
-        let count: u32 = conn.query_row(
-            "SELECT COUNT(*) FROM validated_bounties",
-            [],
-            |row| row.get(0),
-        )?;
+        let count: u32 = conn.query_row("SELECT COUNT(*) FROM validated_bounties", [], |row| {
+            row.get(0)
+        })?;
         Ok(count)
     }
 }
@@ -179,7 +178,7 @@ mod tests {
     #[test]
     fn test_storage_in_memory() {
         let storage = BountyStorage::in_memory().unwrap();
-        
+
         storage.register_miner("hotkey1", "github_user").unwrap();
         let username = storage.get_github_username("hotkey1").unwrap();
         assert_eq!(username, Some("github_user".to_string()));
@@ -188,7 +187,7 @@ mod tests {
     #[test]
     fn test_record_bounty() {
         let storage = BountyStorage::in_memory().unwrap();
-        
+
         let bounty = ValidatedBounty {
             issue_number: 123,
             github_username: "testuser".to_string(),

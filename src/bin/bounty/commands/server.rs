@@ -17,7 +17,11 @@ pub async fn run(host: &str, port: u16, db_path: &str) -> Result<()> {
     info!("Database initialized at {}", db_path);
 
     // Create challenge
-    let challenge = Arc::new(BountyChallenge::new(GITHUB_OWNER, GITHUB_REPO, storage.clone()));
+    let challenge = Arc::new(BountyChallenge::new(
+        GITHUB_OWNER,
+        GITHUB_REPO,
+        storage.clone(),
+    ));
 
     // Run server
     bounty_challenge::server::run_server(host, port, challenge, storage).await

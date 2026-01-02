@@ -81,7 +81,10 @@ impl GitHubClient {
         req
     }
 
-    pub async fn get_closed_issues_with_valid(&self, since: Option<DateTime<Utc>>) -> Result<Vec<GitHubIssue>> {
+    pub async fn get_closed_issues_with_valid(
+        &self,
+        since: Option<DateTime<Utc>>,
+    ) -> Result<Vec<GitHubIssue>> {
         let mut all_issues = Vec::new();
         let mut page = 1;
         let per_page = 100;
@@ -98,10 +101,7 @@ impl GitHubClient {
 
             debug!("Fetching issues page {}: {}", page, url);
 
-            let response = self
-                .build_request(&url)
-                .send()
-                .await?;
+            let response = self.build_request(&url).send().await?;
 
             if !response.status().is_success() {
                 let status = response.status();
@@ -114,12 +114,14 @@ impl GitHubClient {
             let count = issues.len();
 
             // Filter to only closed issues with "valid" label
-            let valid_issues: Vec<_> = issues
-                .into_iter()
-                .filter(|i| i.is_valid_bounty())
-                .collect();
+            let valid_issues: Vec<_> = issues.into_iter().filter(|i| i.is_valid_bounty()).collect();
 
-            info!("Page {}: found {} issues, {} valid", page, count, valid_issues.len());
+            info!(
+                "Page {}: found {} issues, {} valid",
+                page,
+                count,
+                valid_issues.len()
+            );
             all_issues.extend(valid_issues);
 
             if count < per_page {
@@ -149,7 +151,11 @@ impl GitHubClient {
         Ok(response.json().await?)
     }
 
-    pub async fn verify_issue_validity(&self, issue_number: u32, author: &str) -> Result<BountyVerification> {
+    pub async fn verify_issue_validity(
+        &self,
+        issue_number: u32,
+        author: &str,
+    ) -> Result<BountyVerification> {
         let issue = self.get_issue(issue_number).await?;
 
         let is_author_match = issue.user.login.to_lowercase() == author.to_lowercase();

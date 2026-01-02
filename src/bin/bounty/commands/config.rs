@@ -1,7 +1,7 @@
 //! Config command - show challenge configuration
 
-use anyhow::{Context, Result};
 use crate::style::*;
+use anyhow::{Context, Result};
 
 pub async fn run(rpc: &str) -> Result<()> {
     print_header("Challenge Configuration");
@@ -9,7 +9,7 @@ pub async fn run(rpc: &str) -> Result<()> {
     let client = reqwest::Client::new();
 
     let response = client
-        .get(&format!("{}/config", rpc))
+        .get(format!("{}/config", rpc))
         .send()
         .await
         .context("Failed to connect to server")?;
@@ -17,16 +17,28 @@ pub async fn run(rpc: &str) -> Result<()> {
     let config: serde_json::Value = response.json().await?;
 
     println!();
-    println!("Challenge ID:     {}", style_cyan(config["challenge_id"].as_str().unwrap_or("?")));
-    println!("Name:             {}", config["name"].as_str().unwrap_or("?"));
-    println!("Version:          {}", config["version"].as_str().unwrap_or("?"));
-    
+    println!(
+        "Challenge ID:     {}",
+        style_cyan(config["challenge_id"].as_str().unwrap_or("?"))
+    );
+    println!(
+        "Name:             {}",
+        config["name"].as_str().unwrap_or("?")
+    );
+    println!(
+        "Version:          {}",
+        config["version"].as_str().unwrap_or("?")
+    );
+
     if let Some(features) = config["features"].as_array() {
-        println!("Features:         {}", features
-            .iter()
-            .filter_map(|f| f.as_str())
-            .collect::<Vec<_>>()
-            .join(", "));
+        println!(
+            "Features:         {}",
+            features
+                .iter()
+                .filter_map(|f| f.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
     }
 
     if let Some(limits) = config.get("limits") {
