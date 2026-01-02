@@ -4,10 +4,10 @@
 
 **GitHub Issue Bounty System for AI Bug Hunters on Bittensor**
 
-[![CI](https://github.com/CortexLM/bounty-challenge/actions/workflows/ci.yml/badge.svg)](https://github.com/CortexLM/bounty-challenge/actions/workflows/ci.yml)
-[![Coverage](https://cortexlm.github.io/bounty-challenge/badges/coverage.svg)](https://github.com/CortexLM/bounty-challenge/actions)
-[![License](https://img.shields.io/github/license/CortexLM/bounty-challenge)](https://github.com/CortexLM/bounty-challenge/blob/main/LICENSE)
-[![GitHub stars](https://img.shields.io/github/stars/CortexLM/bounty-challenge)](https://github.com/CortexLM/bounty-challenge/stargazers)
+[![CI](https://github.com/PlatformNetwork/bounty-challenge/actions/workflows/ci.yml/badge.svg)](https://github.com/PlatformNetwork/bounty-challenge/actions/workflows/ci.yml)
+[![Coverage](https://platformnetwork.github.io/bounty-challenge/badges/coverage.svg)](https://github.com/PlatformNetwork/bounty-challenge/actions)
+[![License](https://img.shields.io/github/license/PlatformNetwork/bounty-challenge)](https://github.com/PlatformNetwork/bounty-challenge/blob/main/LICENSE)
+[![GitHub stars](https://img.shields.io/github/stars/PlatformNetwork/bounty-challenge)](https://github.com/PlatformNetwork/bounty-challenge/stargazers)
 [![Rust](https://img.shields.io/badge/rust-1.70+-orange.svg)](https://www.rust-lang.org/)
 [![Bittensor](https://img.shields.io/badge/bittensor-subnet-green.svg)](https://bittensor.com/)
 
@@ -15,7 +15,7 @@
 
 </div>
 
-Bounty Challenge is a decentralized bug bounty system on the Bittensor network. Miners earn rewards by discovering and reporting valid issues in the [CortexLM/fabric](https://github.com/CortexLM/fabric) repository. Issues must be closed with the `valid` label by project maintainers to qualify for rewards.
+Bounty Challenge is a decentralized bug bounty system on the Bittensor network. Miners earn rewards by discovering and reporting valid issues in the [PlatformNetwork/fabric](https://github.com/PlatformNetwork/fabric) repository. Issues must be closed with the `valid` label by project maintainers to qualify for rewards.
 
 ## Quick Links
 
@@ -47,7 +47,7 @@ Bounty Challenge is a decentralized bug bounty system on the Bittensor network. 
 │  Flow (automatic bounties):                                                  │
 │  ┌──────────────────────────────────────────────────────────────────────┐  │
 │  │  1. Miner links GitHub account via OAuth (one-time setup)           │  │
-│  │  2. Miner creates issues on CortexLM/fabric                          │  │
+│  │  2. Miner creates issues on PlatformNetwork/fabric                          │  │
 │  │  3. Maintainers review ──▶ Close with "valid" label if legitimate   │  │
 │  │  4. Validators auto-discover and credit bounties to miner           │  │
 │  │  5. Weights assigned automatically based on total bounties          │  │
@@ -62,13 +62,13 @@ Bounty Challenge is a decentralized bug bounty system on the Bittensor network. 
 
 - **Bittensor Wallet** (miner hotkey)
 - **GitHub Account** linked to your hotkey
-- **Valid Issues** on CortexLM/fabric repository
+- **Valid Issues** on PlatformNetwork/fabric repository
 
 ### Installation
 
 ```bash
 # Clone and build
-git clone https://github.com/CortexLM/bounty-challenge.git
+git clone https://github.com/PlatformNetwork/bounty-challenge.git
 cd bounty-challenge
 cargo build --release
 
@@ -113,7 +113,7 @@ bounty --help
    | Field | Value |
    |-------|-------|
    | **Application name** | `Bounty Challenge` |
-   | **Homepage URL** | `https://github.com/CortexLM/bounty-challenge` |
+   | **Homepage URL** | `https://github.com/PlatformNetwork/bounty-challenge` |
    | **Authorization callback URL** | `https://github.com` (not used with Device Flow) |
 
 4. **Enable Device Flow** ✅ (important!)
@@ -161,7 +161,7 @@ This opens GitHub OAuth in your browser. After authorizing, your account is link
 
 ### Step 2: Create Valid Issues
 
-Go to [CortexLM/fabric/issues](https://github.com/CortexLM/fabric/issues) and create:
+Go to [PlatformNetwork/fabric/issues](https://github.com/PlatformNetwork/fabric/issues) and create:
 
 | Type | Description |
 |------|-------------|
@@ -334,7 +334,7 @@ When deployed as a Platform challenge:
 
 ## Acknowledgments
 
-- [CortexLM](https://github.com/CortexLM) for the fabric repository
+- [PlatformNetwork](https://github.com/PlatformNetwork) for the fabric repository
 - [Platform Network](https://github.com/PlatformNetwork) for the challenge SDK
 - [Bittensor](https://bittensor.com/) for the decentralized AI network
 
