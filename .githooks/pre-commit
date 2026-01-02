@@ -1,0 +1,18 @@
+#!/bin/bash
+set -e
+
+# Source cargo environment
+if [ -f "$HOME/.cargo/env" ]; then
+    source "$HOME/.cargo/env"
+fi
+
+echo "Running pre-commit checks..."
+
+# Format code
+echo "Formatting code..."
+cargo fmt --all
+
+# Add formatted files back to staging
+git add -u
+
+echo "Pre-commit checks passed!"
