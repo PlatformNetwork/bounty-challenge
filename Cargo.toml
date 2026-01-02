@@ -1,0 +1,81 @@
+[package]
+name = "bounty-challenge"
+version = "0.1.0"
+edition = "2021"
+description = "Bounty Challenge - Reward miners for valid GitHub issues"
+authors = ["CortexLM"]
+license = "Apache-2.0"
+repository = "https://github.com/CortexLM/bounty-challenge"
+
+[[bin]]
+name = "bounty-server"
+path = "src/main.rs"
+
+[[bin]]
+name = "bounty"
+path = "src/bin/bounty/main.rs"
+
+[dependencies]
+# Platform SDK
+platform-challenge-sdk = { path = "../platform-repo/crates/challenge-sdk", features = ["http-server"] }
+platform-core = { path = "../platform-repo/crates/core" }
+
+# Async runtime
+tokio = { version = "1.40", features = ["full"] }
+async-trait = "0.1"
+futures = "0.3"
+
+# HTTP client for GitHub API
+reqwest = { version = "0.12", features = ["json"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Utils
+uuid = { version = "1.10", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+sha2 = "0.10"
+hex = "0.4"
+
+# Error handling
+anyhow = "1.0"
+thiserror = "2.0"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Database (local cache)
+rusqlite = { version = "0.32", features = ["bundled"] }
+
+# CLI
+clap = { version = "4.5", features = ["derive", "env"] }
+
+# Web server
+axum = { version = "0.7", features = ["json"] }
+tower-http = { version = "0.6", features = ["cors"] }
+
+# Crypto (SS58, sr25519)
+sp-core = { version = "31.0", default-features = false, features = ["std"] }
+
+# URL encoding
+urlencoding = "2.1"
+
+# Thread-safe locks
+parking_lot = "0.12"
+
+# Lazy static
+lazy_static = "1.4"
+
+# Random
+rand = "0.8"
+
+# Open browser
+open = "5.0"
+
+# Config
+toml = "0.8"
+
+[dev-dependencies]
+tokio-test = "0.4"

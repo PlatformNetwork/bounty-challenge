@@ -1,0 +1,20 @@
+# Bounty Challenge Configuration
+
+[github]
+# GitHub OAuth App Client ID (Device Flow)
+client_id = "Ov23liAkfvnMhA6C68iy"
+
+# Target repository for bounties
+owner = "CortexLM"
+repo = "fabric"
+
+[server]
+host = "0.0.0.0"
+port = 8080
+
+[database]
+path = "bounty.db"
+
+[scoring]
+# Logarithmic scoring: score = log2(1 + n) / divisor
+divisor = 10.0

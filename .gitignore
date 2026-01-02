@@ -1,0 +1,33 @@
+# Build artifacts
+/target/
+**/*.rs.bk
+Cargo.lock
+
+# Database
+*.db
+*.db-shm
+*.db-wal
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+*.env
+
+# Logs
+*.log
+logs/
+
+# Test artifacts
+/test-output/
+/coverage/
