@@ -187,8 +187,8 @@ impl PgStorage {
             .get(0);
 
         if !exists {
-            // Run initial migration
-            let migration_sql = include_str!("../migrations/002_rewards_schema.sql");
+            // Run initial migration (PostgreSQL version)
+            let migration_sql = include_str!("../migrations/002_rewards_schema.pg.sql");
             client.batch_execute(migration_sql).await?;
             info!("Applied migration 002_rewards_schema");
         }
@@ -203,7 +203,7 @@ impl PgStorage {
             .get(0);
 
         if !has_penalty {
-            let migration_sql = include_str!("../migrations/003_penalty_system.sql");
+            let migration_sql = include_str!("../migrations/003_penalty_system.pg.sql");
             client.batch_execute(migration_sql).await?;
             info!("Applied migration 003_penalty_system");
         }

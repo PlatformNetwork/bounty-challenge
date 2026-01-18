@@ -81,10 +81,10 @@ impl Migrator {
         let mut entries: Vec<_> = fs::read_dir(dir)?
             .filter_map(|e| e.ok())
             .filter(|e| {
-                e.path()
-                    .extension()
-                    .map(|ext| ext == "sql")
-                    .unwrap_or(false)
+                let path = e.path();
+                let filename = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                // Only load .sql files, not .pg.sql (PostgreSQL-specific)
+                filename.ends_with(".sql") && !filename.ends_with(".pg.sql")
             })
             .collect();
 
