@@ -17,17 +17,9 @@ Complete documentation for miners participating in the Bounty Challenge.
 ## Overview
 
 ```mermaid
-flowchart TB
-    subgraph Platform["Platform Server<br/>https://chain.platform.network"]
-        Bridge["Bridge API<br/>/api/v1/bridge/bounty-challenge/"]
-        Features["• Miner registration (sr25519)<br/>• Issue tracking<br/>• Weight calculation"]
-        Bridge --- Features
-    end
-    
-    Platform --> Target["📋 PlatformNetwork/bounty-challenge<br/>(Issues submitted here)"]
-    
-    Target -.->|"❌ NOT counted"| Cortex["CortexLM/cortex"]
-    Target -.->|"❌ NOT counted"| Fabric["CortexLM/fabric"]
+flowchart LR
+    Platform["Platform Server"] --> Bridge["Bridge API"]
+    Bridge --> Target["📋 bounty-challenge"]
 ```
 
 ### Key Components
@@ -55,23 +47,7 @@ flowchart TB
 
 ```mermaid
 flowchart LR
-    subgraph Step1["1. Secret Key"]
-        K1["64-char hex<br/>or mnemonic"]
-    end
-    
-    subgraph Step2["2. Derive Hotkey"]
-        K2["SS58 format<br/>(5xxx...)"]
-    end
-    
-    subgraph Step3["3. Sign Message"]
-        K3["sr25519 signature"]
-    end
-    
-    subgraph Step4["4. Submit"]
-        K4["Verified &<br/>stored in DB"]
-    end
-    
-    Step1 --> Step2 --> Step3 --> Step4
+    A["1. Secret Key"] --> B["2. Derive Hotkey"] --> C["3. Sign"] --> D["4. Submit"]
 ```
 
 ### Step-by-Step
@@ -183,13 +159,10 @@ For an issue to earn rewards, it must:
 ### Validation Process
 
 ```mermaid
-flowchart TD
-    A["📝 Issue Created"] --> B["👀 Maintainer Review"]
-    B --> C{Valid?}
-    C -->|"✅ Yes"| D["Close + 'valid' label"]
-    C -->|"❌ No"| E["Close without label"]
-    D --> F["💰 Reward credited"]
-    E --> G["No reward"]
+flowchart LR
+    A["Issue Created"] --> B["Review"] --> C{Valid?}
+    C -->|Yes| D["✅ Reward"]
+    C -->|No| E["❌ No reward"]
 ```
 
 ### Label Protection
@@ -206,19 +179,8 @@ The `valid` label is protected by GitHub Actions:
 ### How Rewards Work
 
 ```mermaid
-flowchart TD
-    subgraph Calc["ADAPTIVE REWARD CALCULATION"]
-        A["1️⃣ Count valid issues (24h)"]
-        B["2️⃣ Calculate max weight<br/>max = min(total/250, 1.0)"]
-        C{"total ≤ 100?"}
-        D["weight/issue = 0.01"]
-        E["weight/issue = 0.01 × (100/total)"]
-        F["4️⃣ User weight<br/>= min(user_issues × weight/issue, max)"]
-        
-        A --> B --> C
-        C -->|"Yes"| D --> F
-        C -->|"No"| E --> F
-    end
+flowchart LR
+    A["Count issues"] --> B["Max weight"] --> C["Per-issue weight"] --> D["User weight"]
 ```
 
 ### Formulas

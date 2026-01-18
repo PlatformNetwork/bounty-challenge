@@ -37,47 +37,29 @@ Bounty Challenge is a decentralized issue reward system on the Bittensor network
 
 ## System Overview
 
+### Core Components
+
 ```mermaid
-flowchart TB
-    subgraph BOUNTY["BOUNTY CHALLENGE"]
-        direction TB
-        
-        subgraph Components["Core Components"]
-            direction LR
-            Miner["🧑‍💻 Miner<br/>(register)"]
-            GitHub["📋 GitHub<br/>Issues"]
-            Validator["✅ Validator<br/>(auto-scan)"]
-            Platform["🌐 Platform<br/>(weights)"]
-            
-            Miner -->|"create issue"| GitHub
-            Validator -->|"scan"| GitHub
-            Validator -->|"submit weights"| Platform
-        end
-        
-        subgraph RegFlow["Registration Flow"]
-            R1["1. Run 'bounty' CLI wizard"]
-            R2["2. Enter secret key<br/>(hex/mnemonic)"]
-            R3["3. Enter GitHub username"]
-            R4["4. Sign with sr25519"]
-            R5["5. Server verifies & links"]
-            
-            R1 --> R2 --> R3 --> R4 --> R5
-        end
-        
-        subgraph RewardFlow["Reward Flow"]
-            W1["1. Create issue on<br/>PlatformNetwork/bounty-challenge"]
-            W2["2. Maintainers review"]
-            W3{"Valid?"}
-            W4["Close + 'valid' label"]
-            W5["Validators credit bounty"]
-            W6["Calculate weights (24h)"]
-            W7["Close without label"]
-            
-            W1 --> W2 --> W3
-            W3 -->|"Yes"| W4 --> W5 --> W6
-            W3 -->|"No"| W7
-        end
-    end
+flowchart LR
+    Miner["🧑‍💻 Miner"] -->|"create issue"| GitHub["📋 GitHub Issues"]
+    Validator["✅ Validator"] -->|"scan"| GitHub
+    Validator -->|"submit weights"| Platform["🌐 Platform"]
+```
+
+### Registration Flow
+
+```mermaid
+flowchart LR
+    A["1. Run CLI"] --> B["2. Enter key"] --> C["3. GitHub user"] --> D["4. Sign"] --> E["5. Verified"]
+```
+
+### Reward Flow
+
+```mermaid
+flowchart LR
+    A["Create Issue"] --> B["Review"] --> C{Valid?}
+    C -->|Yes| D["✅ Reward"]
+    C -->|No| E["❌ No reward"]
 ```
 
 ## Reward System

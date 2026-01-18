@@ -321,17 +321,6 @@ valid_label = "valid"
 ## Summary
 
 ```mermaid
-flowchart TD
-    A["📝 Issue Created"] --> B["👀 Maintainer Review"]
-    B --> C["✅ Valid Label Added"]
-    C --> D["📊 Count Issues in 24h"]
-    
-    D --> E["Calculate Max Weight<br/>(N/250)"]
-    D --> F["Calculate Per-Issue Weight"]
-    
-    E --> G["Calculate User Weight"]
-    F --> G
-    
-    G --> H["Normalize for Chain<br/>(u16 conversion)"]
-    H --> I["🎯 Submit to Bittensor"]
+flowchart LR
+    A["Issue"] --> B["Review"] --> C["Count"] --> D["Weights"] --> E["Submit"]
 ```
