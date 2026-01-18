@@ -26,10 +26,8 @@ pub mod discovery;
 pub mod github;
 pub mod github_oauth;
 pub mod metagraph;
-pub mod migrations;
 pub mod pg_storage;
 pub mod server;
-pub mod storage;
 
 pub use auth::{is_valid_ss58_hotkey, verify_signature};
 pub use challenge::BountyChallenge;
@@ -37,4 +35,3 @@ pub use github::GitHubClient;
 pub use github_oauth::GitHubDeviceAuth;
 pub use metagraph::MetagraphCache;
 pub use pg_storage::{calculate_weight, PgStorage};
-pub use storage::BountyStorage;

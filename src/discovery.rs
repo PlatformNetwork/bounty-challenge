@@ -10,21 +10,25 @@ use tokio::time::interval;
 use tracing::{debug, error, info};
 
 use crate::github::GitHubClient;
-use crate::storage::{BountyStorage, ValidatedBounty};
+use crate::pg_storage::PgStorage;
 
 const SCAN_INTERVAL: Duration = Duration::from_secs(300); // 5 minutes
 
 pub struct BountyDiscovery {
     github: GitHubClient,
-    storage: Arc<BountyStorage>,
+    storage: Arc<PgStorage>,
+    repo_owner: String,
+    repo_name: String,
     last_scan: Option<DateTime<Utc>>,
 }
 
 impl BountyDiscovery {
-    pub fn new(owner: &str, repo: &str, storage: Arc<BountyStorage>) -> Self {
+    pub fn new(owner: &str, repo: &str, storage: Arc<PgStorage>) -> Self {
         Self {
             github: GitHubClient::new(owner, repo),
             storage,
+            repo_owner: owner.to_string(),
+            repo_name: repo.to_string(),
             last_scan: None,
         }
     }
@@ -57,7 +61,7 @@ impl BountyDiscovery {
 
         for issue in issues {
             // Check if already credited
-            if self.storage.is_issue_claimed(issue.number)? {
+            if self.storage.is_issue_recorded(&self.repo_owner, &self.repo_name, issue.number as i64).await? {
                 debug!("Issue #{} already credited", issue.number);
                 result.already_claimed += 1;
                 continue;
@@ -66,23 +70,23 @@ impl BountyDiscovery {
             // Find miner with matching GitHub username
             let github_user = issue.user.login.to_lowercase();
 
-            match self.storage.get_hotkey_by_github(&github_user)? {
+            match self.storage.get_hotkey_by_github(&github_user).await? {
                 Some(hotkey) => {
                     // Auto-credit the bounty
-                    let bounty = ValidatedBounty {
-                        issue_number: issue.number,
-                        github_username: issue.user.login.clone(),
-                        miner_hotkey: hotkey.clone(),
-                        validated_at: Utc::now(),
-                        issue_url: issue.html_url.clone(),
-                    };
-
-                    self.storage.record_bounty(&bounty)?;
+                    self.storage.record_resolved_issue(
+                        issue.number as i64,
+                        &self.repo_owner,
+                        &self.repo_name,
+                        &issue.user.login,
+                        &issue.html_url,
+                        Some(&issue.title),
+                        Utc::now(),
+                    ).await?;
 
                     info!(
                         "Auto-credited issue #{} to {} ({})",
                         issue.number,
-                        &hotkey[..16],
+                        &hotkey[..16.min(hotkey.len())],
                         issue.user.login
                     );
                     result.newly_credited += 1;

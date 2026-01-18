@@ -16,7 +16,7 @@ use tower_http::cors::CorsLayer;
 use tracing::{error, info};
 
 use crate::challenge::BountyChallenge;
-use crate::storage::BountyStorage;
+use crate::pg_storage::PgStorage;
 use platform_challenge_sdk::server::{
     EvaluationRequest, EvaluationResponse, HealthResponse, ServerChallenge, ValidationRequest,
     ValidationResponse,
@@ -24,7 +24,7 @@ use platform_challenge_sdk::server::{
 
 pub struct AppState {
     pub challenge: Arc<BountyChallenge>,
-    pub storage: Arc<BountyStorage>,
+    pub storage: Arc<PgStorage>,
     pub started_at: std::time::Instant,
 }
 
@@ -97,7 +97,7 @@ async fn validate_handler(
 }
 
 async fn leaderboard_handler(State(state): State<Arc<AppState>>) -> Json<serde_json::Value> {
-    match state.challenge.get_leaderboard() {
+    match state.challenge.get_leaderboard().await {
         Ok(lb) => Json(serde_json::json!({ "leaderboard": lb })),
         Err(e) => Json(serde_json::json!({ "error": e.to_string() })),
     }
@@ -146,11 +146,11 @@ async fn get_weights_handler(
         now / 12
     });
 
-    // Get all miner scores from storage
-    let scores = match state.storage.get_all_scores() {
-        Ok(s) => s,
+    // Get current weights from PostgreSQL
+    let current_weights = match state.storage.get_current_weights().await {
+        Ok(w) => w,
         Err(e) => {
-            error!("Failed to get scores: {}", e);
+            error!("Failed to get weights: {}", e);
             return Json(GetWeightsResponse {
                 weights: vec![],
                 epoch,
@@ -160,12 +160,12 @@ async fn get_weights_handler(
         }
     };
 
-    // Calculate weights for each miner
-    let mut weights: Vec<MinerWeight> = scores
+    // Convert to MinerWeight
+    let mut weights: Vec<MinerWeight> = current_weights
         .iter()
-        .map(|s| MinerWeight {
-            miner_hotkey: s.miner_hotkey.clone(),
-            weight: calculate_weight(s.valid_issues_count),
+        .map(|w| MinerWeight {
+            miner_hotkey: w.hotkey.clone(),
+            weight: w.weight,
         })
         .collect();
 
@@ -243,10 +243,11 @@ async fn register_handler(
         });
     }
 
-    // Register in storage
+    // Register in storage (async)
     match state
         .storage
-        .register_miner(&request.hotkey, &request.github_username)
+        .register_user(&request.github_username, &request.hotkey)
+        .await
     {
         Ok(()) => {
             info!(
@@ -294,7 +295,7 @@ async fn status_handler(
     Path(hotkey): Path<String>,
 ) -> Json<StatusResponse> {
     // Check if registered
-    let github_username = state.storage.get_github_username(&hotkey).ok().flatten();
+    let github_username = state.storage.get_github_by_hotkey(&hotkey).await.ok().flatten();
 
     if github_username.is_none() {
         return Json(StatusResponse {
@@ -308,20 +309,17 @@ async fn status_handler(
         });
     }
 
-    // Get bounties for this miner
-    let bounties = state.storage.get_miner_bounties(&hotkey).unwrap_or_default();
-    let valid_count = bounties.len() as u32;
+    // Get user balance (valid - invalid) from PostgreSQL
+    let user_balance = state.storage.get_user_balance(&hotkey).await.ok().flatten();
     
-    // Get invalid issues count (from storage if available, else 0)
-    let invalid_count = state.storage.get_invalid_count(&hotkey).unwrap_or(0);
-    let balance = valid_count as i32 - invalid_count as i32;
-    let is_penalized = balance < 0;
-    
-    // Weight is 0 if penalized
-    let weight = if is_penalized {
-        0.0
-    } else {
-        calculate_weight(valid_count)
+    let (valid_count, invalid_count, balance, is_penalized, weight) = match user_balance {
+        Some(b) => {
+            let weight = if b.is_penalized { 0.0 } else {
+                state.storage.calculate_user_weight(&hotkey).await.unwrap_or(0.0)
+            };
+            (b.valid_count as u32, b.invalid_count as u32, b.balance, b.is_penalized, weight)
+        }
+        None => (0, 0, 0, false, 0.0)
     };
 
     Json(StatusResponse {
@@ -361,7 +359,7 @@ async fn invalid_handler(
     State(state): State<Arc<AppState>>,
     Json(request): Json<InvalidIssueRequest>,
 ) -> Json<InvalidIssueResponse> {
-    // Record the invalid issue
+    // Record the invalid issue (async)
     match state.storage.record_invalid_issue(
         request.issue_id,
         &request.repo_owner,
@@ -370,7 +368,7 @@ async fn invalid_handler(
         &request.issue_url,
         request.issue_title.as_deref(),
         request.reason.as_deref(),
-    ) {
+    ).await {
         Ok(()) => {
             info!(
                 "Recorded invalid issue #{} by @{}",
@@ -411,16 +409,16 @@ pub struct StatsResponse {
 }
 
 async fn stats_handler(State(state): State<Arc<AppState>>) -> Json<StatsResponse> {
-    let total_bounties = state.storage.get_total_bounties().unwrap_or(0);
-    let scores = state.storage.get_all_scores().unwrap_or_default();
-    let total_invalid = state.storage.get_total_invalid().unwrap_or(0);
-    let penalized_miners = state.storage.get_penalized_count().unwrap_or(0);
+    // Get stats from PostgreSQL
+    let stats = state.storage.get_stats_24h().await.ok();
+    let current_weights = state.storage.get_current_weights().await.unwrap_or_default();
+    let (penalized, _total) = state.storage.get_penalty_stats().await.unwrap_or((0, 0));
 
     Json(StatsResponse {
-        total_bounties,
-        total_miners: scores.len(),
-        total_invalid,
-        penalized_miners,
+        total_bounties: stats.map(|s| s.total_issues_resolved as u32).unwrap_or(0),
+        total_miners: current_weights.len(),
+        total_invalid: current_weights.iter().filter(|w| w.is_penalized).count() as u32,
+        penalized_miners: penalized as u32,
         challenge_id: "bounty-challenge".to_string(),
         version: env!("CARGO_PKG_VERSION").to_string(),
     })
@@ -431,7 +429,7 @@ pub async fn run_server(
     host: &str,
     port: u16,
     challenge: Arc<BountyChallenge>,
-    storage: Arc<BountyStorage>,
+    storage: Arc<PgStorage>,
 ) -> anyhow::Result<()> {
     let state = Arc::new(AppState {
         challenge,

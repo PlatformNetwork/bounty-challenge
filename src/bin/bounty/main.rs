@@ -63,9 +63,9 @@ enum Commands {
         #[arg(short, long, env = "CHALLENGE_PORT", default_value = "8080")]
         port: u16,
 
-        /// Database path (SQLite for local cache)
-        #[arg(long, env = "BOUNTY_DB_PATH", default_value = "bounty.db")]
-        db: String,
+        /// PostgreSQL database URL
+        #[arg(long, env = "DATABASE_URL")]
+        database_url: String,
     },
 
     /// Run as validator (auto-discovers bounties)
@@ -117,9 +117,9 @@ async fn main() {
 
     let result = match command {
         Commands::Wizard => wizard::run_register_wizard(&cli.rpc).await,
-        Commands::Server { host, port, db } => {
+        Commands::Server { host, port, database_url } => {
             print_banner();
-            commands::server::run(&host, port, &db).await
+            commands::server::run(&host, port, &database_url).await
         }
         Commands::Validate { platform, hotkey } => commands::validate::run(&platform, hotkey).await,
         Commands::Leaderboard { limit } => commands::leaderboard::run(&cli.rpc, limit).await,

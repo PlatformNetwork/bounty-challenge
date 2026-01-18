@@ -1,16 +1,13 @@
 //! Bounty Challenge Server
 //!
-//! Rewards miners for valid GitHub issues in CortexLM/fabric
+//! Rewards miners for valid GitHub issues
 
 use std::sync::Arc;
 
-use bounty_challenge::{BountyChallenge, BountyStorage};
+use bounty_challenge::{BountyChallenge, PgStorage};
 use platform_challenge_sdk::server::{ChallengeServer, ServerConfig};
-use tracing::info;
+use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
-
-const GITHUB_OWNER: &str = "CortexLM";
-const GITHUB_REPO: &str = "fabric";
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -23,13 +20,17 @@ async fn main() -> anyhow::Result<()> {
 
     info!("Starting Bounty Challenge Server");
 
-    // Initialize storage
-    let db_path = std::env::var("BOUNTY_DB_PATH").unwrap_or_else(|_| "bounty.db".to_string());
-    let storage = Arc::new(BountyStorage::new(&db_path)?);
-    info!("Storage initialized at {}", db_path);
+    // Initialize PostgreSQL storage (required)
+    let database_url = std::env::var("DATABASE_URL").map_err(|_| {
+        error!("DATABASE_URL environment variable is required");
+        anyhow::anyhow!("DATABASE_URL not set")
+    })?;
+    
+    let storage = Arc::new(PgStorage::new(&database_url).await?);
+    info!("PostgreSQL storage initialized");
 
     // Create challenge
-    let challenge = BountyChallenge::new(GITHUB_OWNER, GITHUB_REPO, storage);
+    let challenge = BountyChallenge::new_with_storage(storage.clone());
 
     // Build and run server
     let config = ServerConfig::from_env();

@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use chrono::Utc;
+
 use platform_challenge_sdk::server::{
     ConfigLimits, ConfigResponse, EvaluationRequest, EvaluationResponse, ServerChallenge,
     ValidationRequest, ValidationResponse,
@@ -14,7 +14,7 @@ use serde_json::json;
 use tracing::{info, warn};
 
 use crate::github::GitHubClient;
-use crate::storage::{BountyStorage, ValidatedBounty};
+use crate::pg_storage::PgStorage;
 
 const CHALLENGE_ID: &str = "bounty-challenge";
 const CHALLENGE_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -52,13 +52,20 @@ pub struct RejectedIssue {
 
 pub struct BountyChallenge {
     github: GitHubClient,
-    storage: Arc<BountyStorage>,
+    storage: Arc<PgStorage>,
 }
 
 impl BountyChallenge {
-    pub fn new(owner: &str, repo: &str, storage: Arc<BountyStorage>) -> Self {
+    pub fn new(owner: &str, repo: &str, storage: Arc<PgStorage>) -> Self {
         Self {
             github: GitHubClient::new(owner, repo),
+            storage,
+        }
+    }
+
+    pub fn new_with_storage(storage: Arc<PgStorage>) -> Self {
+        Self {
+            github: GitHubClient::new("PlatformNetwork", "bounty-challenge"),
             storage,
         }
     }
@@ -69,7 +76,8 @@ impl BountyChallenge {
         data: RegisterSubmission,
     ) -> Result<EvaluationResponse, ChallengeError> {
         self.storage
-            .register_miner(participant_id, &data.github_username)
+            .register_user(&data.github_username, participant_id)
+            .await
             .map_err(|e| ChallengeError::Internal(e.to_string()))?;
 
         info!(
@@ -96,11 +104,16 @@ impl BountyChallenge {
         let mut claimed = Vec::new();
         let mut rejected = Vec::new();
 
+        // Get repo info (default to PlatformNetwork/bounty-challenge)
+        let repo_owner = "PlatformNetwork";
+        let repo_name = "bounty-challenge";
+
         for issue_number in &data.issue_numbers {
-            // Check if already claimed
+            // Check if already recorded
             if self
                 .storage
-                .is_issue_claimed(*issue_number)
+                .is_issue_recorded(repo_owner, repo_name, *issue_number as i64)
+                .await
                 .map_err(|e| ChallengeError::Internal(e.to_string()))?
             {
                 rejected.push(RejectedIssue {
@@ -135,17 +148,18 @@ impl BountyChallenge {
                         continue;
                     }
 
-                    // Record the bounty
-                    let bounty = ValidatedBounty {
-                        issue_number: *issue_number,
-                        github_username: data.github_username.clone(),
-                        miner_hotkey: participant_id.to_string(),
-                        validated_at: Utc::now(),
-                        issue_url: verification.issue_url.clone(),
-                    };
-
+                    // Record the resolved issue
                     self.storage
-                        .record_bounty(&bounty)
+                        .record_resolved_issue(
+                            *issue_number as i64,
+                            repo_owner,
+                            repo_name,
+                            &data.github_username,
+                            &verification.issue_url,
+                            Some(&format!("Issue #{}", issue_number)),
+                            chrono::Utc::now(),
+                        )
+                        .await
                         .map_err(|e| ChallengeError::Internal(e.to_string()))?;
 
                     claimed.push(ClaimedIssue {
@@ -163,25 +177,26 @@ impl BountyChallenge {
             }
         }
 
-        // Calculate score based on total valid issues for this miner
-        let miner_bounties = self
+        // Calculate score based on weight from PgStorage
+        let weight = self
             .storage
-            .get_miner_bounties(participant_id)
-            .map_err(|e| ChallengeError::Internal(e.to_string()))?;
+            .calculate_user_weight(participant_id)
+            .await
+            .unwrap_or(0.0);
 
-        let total_valid = miner_bounties.len() as u32;
-        let score = self.calculate_score(total_valid);
+        let user_balance = self.storage.get_user_balance(participant_id).await.ok().flatten();
+        let total_valid = user_balance.map(|b| b.valid_count as u32).unwrap_or(0);
 
         let result = ClaimResult {
             claimed,
             rejected,
             total_valid,
-            score,
+            score: weight,
         };
 
         Ok(EvaluationResponse::success(
             request_id,
-            score,
+            weight,
             serde_json::to_value(&result).unwrap(),
         ))
     }
@@ -193,21 +208,22 @@ impl BountyChallenge {
         ((1.0 + valid_issues as f64).ln() / std::f64::consts::LN_2) / 10.0
     }
 
-    pub fn get_leaderboard(&self) -> Result<Vec<serde_json::Value>, ChallengeError> {
-        let scores = self
+    pub async fn get_leaderboard(&self) -> Result<Vec<serde_json::Value>, ChallengeError> {
+        let weights = self
             .storage
-            .get_all_scores()
+            .get_leaderboard(100)
+            .await
             .map_err(|e| ChallengeError::Internal(e.to_string()))?;
 
-        let leaderboard: Vec<_> = scores
+        let leaderboard: Vec<_> = weights
             .into_iter()
-            .map(|s| {
+            .map(|w| {
                 json!({
-                    "miner_hotkey": s.miner_hotkey,
-                    "github_username": s.github_username,
-                    "valid_issues": s.valid_issues_count,
-                    "score": self.calculate_score(s.valid_issues_count),
-                    "last_updated": s.last_updated.to_rfc3339(),
+                    "miner_hotkey": w.hotkey,
+                    "github_username": w.github_username,
+                    "valid_issues": w.issues_resolved_24h,
+                    "weight": w.weight,
+                    "is_penalized": w.is_penalized,
                 })
             })
             .collect();
@@ -258,7 +274,7 @@ impl ServerChallenge for BountyChallenge {
                     .await
             }
             "leaderboard" => {
-                let leaderboard = self.get_leaderboard()?;
+                let leaderboard = self.get_leaderboard().await?;
                 Ok(EvaluationResponse::success(
                     &request.request_id,
                     0.0,
