@@ -16,24 +16,18 @@ Complete documentation for miners participating in the Bounty Challenge.
 
 ## Overview
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           Platform Server                                    │
-│                 https://chain.platform.network                               │
-│  ┌─────────────────────────────────────────────────────────────────────┐    │
-│  │  Bridge API: /api/v1/bridge/bounty-challenge/                       │    │
-│  │  - Miner registration with sr25519 signatures                       │    │
-│  │  - Issue tracking across multiple repositories                      │    │
-│  │  - Weight calculation & distribution                                │    │
-│  └─────────────────────────────────────────────────────────────────────┘    │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                    │
-                    ┌───────────────┼───────────────┐
-                    ▼               ▼               ▼
-            ┌─────────────┐ ┌─────────────┐ ┌─────────────┐
-            │  CortexLM/  │ │  CortexLM/  │ │   Other     │
-            │   cortex    │ │   fabric    │ │   Repos     │
-            └─────────────┘ └─────────────┘ └─────────────┘
+```mermaid
+flowchart TB
+    subgraph Platform["Platform Server<br/>https://chain.platform.network"]
+        Bridge["Bridge API<br/>/api/v1/bridge/bounty-challenge/"]
+        Features["• Miner registration (sr25519)<br/>• Issue tracking<br/>• Weight calculation"]
+        Bridge --- Features
+    end
+    
+    Platform --> Target["📋 PlatformNetwork/bounty-challenge<br/>(Issues submitted here)"]
+    
+    Target -.->|"❌ NOT counted"| Cortex["CortexLM/cortex"]
+    Target -.->|"❌ NOT counted"| Fabric["CortexLM/fabric"]
 ```
 
 ### Key Components
@@ -59,15 +53,25 @@ Complete documentation for miners participating in the Bounty Challenge.
 
 ## Registration Flow
 
-```
-┌──────────────┐     ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-│  1. Secret   │────▶│  2. Derive   │────▶│  3. Sign     │────▶│  4. Submit   │
-│     Key      │     │    Hotkey    │     │   Message    │     │   to Server  │
-└──────────────┘     └──────────────┘     └──────────────┘     └──────────────┘
-      │                    │                    │                    │
-      ▼                    ▼                    ▼                    ▼
-   64-char hex         SS58 format        sr25519 sig          Verified &
-   or mnemonic         (5xxx...)          on message           stored in DB
+```mermaid
+flowchart LR
+    subgraph Step1["1. Secret Key"]
+        K1["64-char hex<br/>or mnemonic"]
+    end
+    
+    subgraph Step2["2. Derive Hotkey"]
+        K2["SS58 format<br/>(5xxx...)"]
+    end
+    
+    subgraph Step3["3. Sign Message"]
+        K3["sr25519 signature"]
+    end
+    
+    subgraph Step4["4. Submit"]
+        K4["Verified &<br/>stored in DB"]
+    end
+    
+    Step1 --> Step2 --> Step3 --> Step4
 ```
 
 ### Step-by-Step
@@ -178,18 +182,14 @@ For an issue to earn rewards, it must:
 
 ### Validation Process
 
-```
-Issue Created
-     │
-     ▼
-┌────────────────┐
-│ Maintainer     │
-│ Review         │
-└────────────────┘
-     │
-     ├── Valid? ──────▶ Close + Add 'valid' label ──▶ Reward credited
-     │
-     └── Invalid? ────▶ Close without label ─────────▶ No reward
+```mermaid
+flowchart TD
+    A["📝 Issue Created"] --> B["👀 Maintainer Review"]
+    B --> C{Valid?}
+    C -->|"✅ Yes"| D["Close + 'valid' label"]
+    C -->|"❌ No"| E["Close without label"]
+    D --> F["💰 Reward credited"]
+    E --> G["No reward"]
 ```
 
 ### Label Protection
@@ -205,26 +205,20 @@ The `valid` label is protected by GitHub Actions:
 
 ### How Rewards Work
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                    ADAPTIVE REWARD CALCULATION                               │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  1. Count total valid issues in last 24 hours                               │
-│                                                                              │
-│  2. Calculate maximum available weight:                                      │
-│     max_weight = min(total_issues / 250, 1.0)                               │
-│                                                                              │
-│  3. Calculate weight per issue (adaptive):                                   │
-│     if total_issues <= 100:                                                  │
-│         weight_per_issue = 0.01                                              │
-│     else:                                                                    │
-│         weight_per_issue = 0.01 × (100 / total_issues)                      │
-│                                                                              │
-│  4. Calculate user weight:                                                   │
-│     user_weight = min(user_issues × weight_per_issue, max_weight)           │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph Calc["ADAPTIVE REWARD CALCULATION"]
+        A["1️⃣ Count valid issues (24h)"]
+        B["2️⃣ Calculate max weight<br/>max = min(total/250, 1.0)"]
+        C{"total ≤ 100?"}
+        D["weight/issue = 0.01"]
+        E["weight/issue = 0.01 × (100/total)"]
+        F["4️⃣ User weight<br/>= min(user_issues × weight/issue, max)"]
+        
+        A --> B --> C
+        C -->|"Yes"| D --> F
+        C -->|"No"| E --> F
+    end
 ```
 
 ### Formulas

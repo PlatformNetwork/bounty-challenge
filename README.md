@@ -37,34 +37,47 @@ Bounty Challenge is a decentralized issue reward system on the Bittensor network
 
 ## System Overview
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           BOUNTY CHALLENGE                                   │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐  │
-│  │   Miner     │    │   GitHub    │    │  Validator  │    │  Platform   │  │
-│  │ (register)  │───▶│   Issues    │◀───│ (auto-scan) │───▶│  (weights)  │  │
-│  └─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘  │
-│                                                                              │
-│  Registration Flow:                                                          │
-│  ┌──────────────────────────────────────────────────────────────────────┐  │
-│  │  1. Miner runs 'bounty' CLI wizard                                   │  │
-│  │  2. Enters miner secret key (hex or mnemonic)                        │  │
-│  │  3. Enters GitHub username                                           │  │
-│  │  4. Signs registration with sr25519                                  │  │
-│  │  5. Server verifies signature and links account                      │  │
-│  └──────────────────────────────────────────────────────────────────────┘  │
-│                                                                              │
-│  Reward Flow:                                                                │
-│  ┌──────────────────────────────────────────────────────────────────────┐  │
-│  │  1. Miner creates issue on PlatformNetwork/bounty-challenge (THIS REPO)    │  │
-│  │  2. Maintainers review → Close with "valid" label if legitimate     │  │
-│  │  3. Validators auto-scan and credit bounty to registered miner      │  │
-│  │  4. Weights calculated based on 24h activity (adaptive formula)     │  │
-│  └──────────────────────────────────────────────────────────────────────┘  │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph BOUNTY["BOUNTY CHALLENGE"]
+        direction TB
+        
+        subgraph Components["Core Components"]
+            direction LR
+            Miner["🧑‍💻 Miner<br/>(register)"]
+            GitHub["📋 GitHub<br/>Issues"]
+            Validator["✅ Validator<br/>(auto-scan)"]
+            Platform["🌐 Platform<br/>(weights)"]
+            
+            Miner -->|"create issue"| GitHub
+            Validator -->|"scan"| GitHub
+            Validator -->|"submit weights"| Platform
+        end
+        
+        subgraph RegFlow["Registration Flow"]
+            R1["1. Run 'bounty' CLI wizard"]
+            R2["2. Enter secret key<br/>(hex/mnemonic)"]
+            R3["3. Enter GitHub username"]
+            R4["4. Sign with sr25519"]
+            R5["5. Server verifies & links"]
+            
+            R1 --> R2 --> R3 --> R4 --> R5
+        end
+        
+        subgraph RewardFlow["Reward Flow"]
+            W1["1. Create issue on<br/>PlatformNetwork/bounty-challenge"]
+            W2["2. Maintainers review"]
+            W3{"Valid?"}
+            W4["Close + 'valid' label"]
+            W5["Validators credit bounty"]
+            W6["Calculate weights (24h)"]
+            W7["Close without label"]
+            
+            W1 --> W2 --> W3
+            W3 -->|"Yes"| W4 --> W5 --> W6
+            W3 -->|"No"| W7
+        end
+    end
 ```
 
 ## Reward System
@@ -349,16 +362,23 @@ cargo check
 
 When deployed as a Platform challenge module:
 
-```
-┌─────────────────┐     ┌──────────────────────┐
-│     Miner       │────▶│   Platform Server    │
-│   (CLI/wizard)  │     │ (chain.platform.net) │
-└─────────────────┘     │                      │
-                        │    ┌──────────┐      │
-┌─────────────────┐     │    │PostgreSQL│      │
-│ Bounty Challenge│◀────│    └──────────┘      │
-│   (container)   │     │                      │
-└─────────────────┘     └──────────────────────┘
+```mermaid
+flowchart LR
+    subgraph Miners
+        Miner["🧑‍💻 Miner<br/>(CLI/wizard)"]
+    end
+    
+    subgraph Platform["Platform Server<br/>chain.platform.network"]
+        API["API Gateway"]
+        DB[("PostgreSQL")]
+        Bounty["Bounty Challenge<br/>(container)"]
+        
+        API --> DB
+        Bounty --> DB
+    end
+    
+    Miner -->|"register/status"| API
+    API -->|"route"| Bounty
 ```
 
 ## Acknowledgments
