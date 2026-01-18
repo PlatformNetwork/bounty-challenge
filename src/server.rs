@@ -5,7 +5,7 @@
 use std::sync::Arc;
 
 use axum::{
-    extract::{Query, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     routing::{get, post},
     Json, Router,
@@ -36,6 +36,10 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/validate", post(validate_handler))
         .route("/leaderboard", get(leaderboard_handler))
         .route("/get_weights", get(get_weights_handler))
+        // Bridge API endpoints (for CLI registration)
+        .route("/register", post(register_handler))
+        .route("/status/:hotkey", get(status_handler))
+        .route("/stats", get(stats_handler))
         .layer(CorsLayer::permissive())
         .with_state(state)
 }
@@ -186,6 +190,150 @@ async fn get_weights_handler(
         epoch,
         challenge_id: "bounty-challenge".to_string(),
         total_miners,
+    })
+}
+
+// ============================================================================
+// POST /register - Register GitHub username with hotkey (Bridge API)
+// ============================================================================
+
+#[derive(Debug, Deserialize)]
+pub struct RegisterRequest {
+    pub hotkey: String,
+    pub github_username: String,
+    pub signature: String,
+    pub timestamp: i64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct RegisterResponse {
+    pub success: bool,
+    pub message: Option<String>,
+    pub error: Option<String>,
+}
+
+async fn register_handler(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<RegisterRequest>,
+) -> Json<RegisterResponse> {
+    // Validate timestamp (must be within 5 minutes)
+    let now = chrono::Utc::now().timestamp();
+    if (now - request.timestamp).abs() > 300 {
+        return Json(RegisterResponse {
+            success: false,
+            message: None,
+            error: Some("Timestamp expired. Please try again.".to_string()),
+        });
+    }
+
+    // Verify signature
+    let message = format!(
+        "register_github:{}:{}",
+        request.github_username.to_lowercase(),
+        request.timestamp
+    );
+
+    if !crate::auth::verify_signature(&request.hotkey, &message, &request.signature) {
+        return Json(RegisterResponse {
+            success: false,
+            message: None,
+            error: Some("Invalid signature. Make sure you're using the correct key.".to_string()),
+        });
+    }
+
+    // Register in storage
+    match state
+        .storage
+        .register_miner(&request.hotkey, &request.github_username)
+    {
+        Ok(()) => {
+            info!(
+                "Registered GitHub user @{} with hotkey {}",
+                request.github_username,
+                &request.hotkey[..16.min(request.hotkey.len())]
+            );
+            Json(RegisterResponse {
+                success: true,
+                message: Some(format!(
+                    "Successfully registered @{} with your hotkey.",
+                    request.github_username
+                )),
+                error: None,
+            })
+        }
+        Err(e) => {
+            error!("Registration failed: {}", e);
+            Json(RegisterResponse {
+                success: false,
+                message: None,
+                error: Some(format!("Registration failed: {}", e)),
+            })
+        }
+    }
+}
+
+// ============================================================================
+// GET /status/:hotkey - Get status for a hotkey
+// ============================================================================
+
+#[derive(Debug, Serialize)]
+pub struct StatusResponse {
+    pub registered: bool,
+    pub github_username: Option<String>,
+    pub valid_issues_count: Option<u32>,
+    pub weight: Option<f64>,
+}
+
+async fn status_handler(
+    State(state): State<Arc<AppState>>,
+    Path(hotkey): Path<String>,
+) -> Json<StatusResponse> {
+    // Check if registered
+    let github_username = state.storage.get_github_username(&hotkey).ok().flatten();
+
+    if github_username.is_none() {
+        return Json(StatusResponse {
+            registered: false,
+            github_username: None,
+            valid_issues_count: None,
+            weight: None,
+        });
+    }
+
+    // Get bounties for this miner
+    let bounties = state.storage.get_miner_bounties(&hotkey).unwrap_or_default();
+    let valid_count = bounties.len() as u32;
+    let weight = calculate_weight(valid_count);
+
+    Json(StatusResponse {
+        registered: true,
+        github_username,
+        valid_issues_count: Some(valid_count),
+        weight: Some(weight),
+    })
+}
+
+// ============================================================================
+// GET /stats - Get challenge statistics
+// ============================================================================
+
+#[derive(Debug, Serialize)]
+pub struct StatsResponse {
+    pub total_bounties: u32,
+    pub total_miners: usize,
+    pub challenge_id: String,
+    pub version: String,
+}
+
+async fn stats_handler(State(state): State<Arc<AppState>>) -> Json<StatsResponse> {
+    let total_bounties = state.storage.get_total_bounties().unwrap_or(0);
+    let scores = state.storage.get_all_scores().unwrap_or_default();
+
+    Json(StatsResponse {
+        total_bounties,
+        total_miners: scores.len(),
+        challenge_id: "bounty-challenge".to_string(),
+        version: env!("CARGO_PKG_VERSION").to_string(),
     })
 }
 

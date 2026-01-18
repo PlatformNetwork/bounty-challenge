@@ -1,13 +1,12 @@
 <div align="center">
 
-# Bουnτү chαllεηgε
+# bουηtү chαllεηgε
 
-**GitHub Issue Bounty System for AI Bug Hunters on Bittensor**
+**GitHub Issue Reward System for Cortex on Bittensor**
 
-[![CI](https://github.com/PlatformNetwork/bounty-challenge/actions/workflows/ci.yml/badge.svg)](https://github.com/PlatformNetwork/bounty-challenge/actions/workflows/ci.yml)
-[![Coverage](https://platformnetwork.github.io/bounty-challenge/badges/coverage.svg)](https://github.com/PlatformNetwork/bounty-challenge/actions)
-[![License](https://img.shields.io/github/license/PlatformNetwork/bounty-challenge)](https://github.com/PlatformNetwork/bounty-challenge/blob/main/LICENSE)
-[![GitHub stars](https://img.shields.io/github/stars/PlatformNetwork/bounty-challenge)](https://github.com/PlatformNetwork/bounty-challenge/stargazers)
+[![CI](https://github.com/CortexLM/bounty-challenge/actions/workflows/ci.yml/badge.svg)](https://github.com/CortexLM/bounty-challenge/actions/workflows/ci.yml)
+[![License](https://img.shields.io/github/license/CortexLM/bounty-challenge)](https://github.com/CortexLM/bounty-challenge/blob/main/LICENSE)
+[![GitHub stars](https://img.shields.io/github/stars/CortexLM/bounty-challenge)](https://github.com/CortexLM/bounty-challenge/stargazers)
 [![Rust](https://img.shields.io/badge/rust-1.70+-orange.svg)](https://www.rust-lang.org/)
 [![Bittensor](https://img.shields.io/badge/bittensor-subnet-green.svg)](https://bittensor.com/)
 
@@ -15,22 +14,26 @@
 
 </div>
 
-Bounty Challenge is a decentralized bug bounty system on the Bittensor network. Miners earn rewards by discovering and reporting valid issues in the [PlatformNetwork/fabric](https://github.com/PlatformNetwork/fabric) repository. Issues must be closed with the `valid` label by project maintainers to qualify for rewards.
+Bounty Challenge is a decentralized issue reward system on the Bittensor network. Miners earn TAO rewards by discovering and reporting valid issues. Issues must be closed with the `valid` label by project maintainers to qualify for rewards.
+
+> **IMPORTANT**: To receive rewards, you MUST submit issues in **this repository** ([CortexLM/bounty-challenge](https://github.com/CortexLM/bounty-challenge/issues)). Issues submitted to other repositories (CortexLM/cortex, CortexLM/fabric, etc.) will **NOT** be counted for rewards.
 
 ## Quick Links
 
-- [Getting Started](docs/getting-started.md) - Setup and first bounty claim
-- [API Reference](docs/api-reference.md) - Endpoints and payload formats
-- [Scoring & Mathematics](docs/scoring.md) - Weight calculation formulas
-- [Anti-Abuse Mechanisms](docs/anti-abuse.md) - Protection against gaming
+- [Getting Started](docs/miner/getting-started.md) - Installation and first registration
+- [Registration Guide](docs/miner/registration.md) - Link your GitHub account
+- [Scoring & Rewards](docs/reference/scoring.md) - Weight calculation formulas
+- [API Reference](docs/reference/api-reference.md) - Endpoints and payloads
+- [Validator Setup](docs/validator/setup.md) - Run a validator
 
 ## Features
 
-- **GitHub Integration**: Direct verification via GitHub API
-- **Anti-Gaming**: Logarithmic scoring with maintainer approval
-- **Decentralized Validation**: Stake-weighted consensus on rewards
+- **Centralized Bug Bounty**: All issues tracked in this repository
+- **Adaptive Rewards**: Dynamic weight calculation based on daily activity
+- **Cryptographic Registration**: sr25519 signature-based hotkey linking
 - **Real-Time Leaderboard**: Track miner standings and valid issues
-- **Multi-Epoch Support**: Continuous bounty accumulation
+- **PostgreSQL Backend**: Production-ready storage via Platform integration
+- **GitHub Label Protection**: Automated label protection via GitHub Actions
 
 ## System Overview
 
@@ -40,128 +43,132 @@ Bounty Challenge is a decentralized bug bounty system on the Bittensor network. 
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
 │  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐  │
-│  │   Miner     │    │   GitHub    │    │ Validators  │    │  Platform   │  │
+│  │   Miner     │    │   GitHub    │    │  Validator  │    │  Platform   │  │
 │  │ (register)  │───▶│   Issues    │◀───│ (auto-scan) │───▶│  (weights)  │  │
 │  └─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘  │
 │                                                                              │
-│  Flow (automatic bounties):                                                  │
+│  Registration Flow:                                                          │
 │  ┌──────────────────────────────────────────────────────────────────────┐  │
-│  │  1. Miner links GitHub account via OAuth (one-time setup)           │  │
-│  │  2. Miner creates issues on PlatformNetwork/fabric                          │  │
-│  │  3. Maintainers review ──▶ Close with "valid" label if legitimate   │  │
-│  │  4. Validators auto-discover and credit bounties to miner           │  │
-│  │  5. Weights assigned automatically based on total bounties          │  │
+│  │  1. Miner runs 'bounty' CLI wizard                                   │  │
+│  │  2. Enters miner secret key (hex or mnemonic)                        │  │
+│  │  3. Enters GitHub username                                           │  │
+│  │  4. Signs registration with sr25519                                  │  │
+│  │  5. Server verifies signature and links account                      │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                                                                              │
+│  Reward Flow:                                                                │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │  1. Miner creates issue on CortexLM/bounty-challenge (THIS REPO)    │  │
+│  │  2. Maintainers review → Close with "valid" label if legitimate     │  │
+│  │  3. Validators auto-scan and credit bounty to registered miner      │  │
+│  │  4. Weights calculated based on 24h activity (adaptive formula)     │  │
 │  └──────────────────────────────────────────────────────────────────────┘  │
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
+## Reward System
+
+Bounty Challenge uses an **adaptive reward system** that adjusts based on daily activity.
+
+### Emission Rate
+
+Maximum emission is reached at **250 issues per day**:
+
+$$W_{max} = \min\left(\frac{N_{total}}{250}, 1.0\right)$$
+
+| Daily Issues | Max Weight Available |
+|--------------|---------------------|
+| 50 | 0.20 (20%) |
+| 100 | 0.40 (40%) |
+| 250 | 1.00 (100%) |
+| 500 | 1.00 (capped) |
+
+### Adaptive Per-Issue Weight
+
+Each resolved issue gives **0.01 weight** by default, but this adapts when activity is high:
+
+$$w_{issue} = \begin{cases} 
+0.01 & \text{if } N_{total} \leq 100 \\ 
+0.01 \times \frac{100}{N_{total}} & \text{if } N_{total} > 100
+\end{cases}$$
+
+| Daily Issues | Weight per Issue |
+|--------------|-----------------|
+| 50 | 0.0100 |
+| 100 | 0.0100 |
+| 200 | 0.0050 |
+| 500 | 0.0020 |
+
+### User Weight Calculation
+
+Your total weight is your issues multiplied by the current per-issue weight:
+
+$$W_{user} = \min(n_{user} \times w_{issue}, W_{max})$$
+
+**Example:** With 200 issues/day globally, if you resolve 10 issues:
+- Weight per issue: 0.005
+- Your weight: 10 × 0.005 = 0.05 (5%)
+
+See [Scoring Documentation](docs/reference/scoring.md) for complete specifications.
+
 ## Quick Start for Miners
 
 ### Prerequisites
 
-- **Bittensor Wallet** (miner hotkey)
-- **GitHub Account** linked to your hotkey
-- **Valid Issues** on PlatformNetwork/fabric repository
+- **Bittensor Wallet** (miner hotkey with secret key)
+- **GitHub Account** 
+- **Rust** 1.70+ (to build the CLI)
 
 ### Installation
 
 ```bash
 # Clone and build
-git clone https://github.com/PlatformNetwork/bounty-challenge.git
+git clone https://github.com/CortexLM/bounty-challenge.git
 cd bounty-challenge
 cargo build --release
 
-# Two binaries are built:
-# - bounty        : CLI for miners
-# - bounty-server : Direct server mode
-```
-
-### CLI Usage
-
-```bash
 # Add to PATH
 export PATH="$PWD/target/release:$PATH"
 
-# View commands
-bounty --help
+# Verify installation
+bounty --version
 ```
 
-### Environment Variables
+### Register Your GitHub Account
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `GITHUB_TOKEN` | - | GitHub API token (increases rate limits) |
-| `GITHUB_CLIENT_ID` | - | GitHub OAuth App client ID |
-| `GITHUB_CLIENT_SECRET` | - | GitHub OAuth App client secret |
-| `GITHUB_REDIRECT_URI` | `http://localhost:8080/auth/callback` | OAuth callback URL |
-| `BOUNTY_DB_PATH` | `bounty.db` | SQLite database path |
-| `CHALLENGE_HOST` | `0.0.0.0` | Server bind address |
-| `CHALLENGE_PORT` | `8080` | Server port |
-| `MINER_HOTKEY` | - | Your miner hotkey (SS58) |
-
-## Subnet Owner Setup
-
-### Creating a GitHub OAuth App
-
-1. Go to **GitHub Settings** → **Developer settings** → **OAuth Apps**
-   - Direct link: https://github.com/settings/developers
-
-2. Click **"New OAuth App"**
-
-3. Fill in the form:
-   | Field | Value |
-   |-------|-------|
-   | **Application name** | `Bounty Challenge` |
-   | **Homepage URL** | `https://github.com/PlatformNetwork/bounty-challenge` |
-   | **Authorization callback URL** | `https://github.com` (not used with Device Flow) |
-
-4. **Enable Device Flow** ✅ (important!)
-
-5. Click **"Register application"**
-
-6. Copy the **Client ID** (shown immediately)
-
-7. Set environment variable on your server:
-   ```bash
-   export GITHUB_CLIENT_ID="Iv1.xxxxxxxxxxxx"
-   ```
-
-> **Note**: Device Flow doesn't require a client secret for public clients!
-
-### Running the Server
+Run the interactive registration wizard:
 
 ```bash
-# With GitHub OAuth (Device Flow)
-GITHUB_CLIENT_ID="Iv1.xxx" \
-GITHUB_TOKEN="ghp_xxx" \
-bounty server --port 8080
+bounty
 ```
 
-### How Device Flow Works
-
-When a miner runs `bounty register`:
-
-1. CLI requests a device code from GitHub
-2. Miner sees: "Go to github.com/login/device and enter code: ABCD-1234"
-3. Miner authorizes in browser
-4. CLI automatically detects authorization and links the account
-
-No callback URL needed!
-
-### Step 1: Register Your GitHub Account (One-Time)
-
-Link your GitHub account via OAuth:
+Or explicitly:
 
 ```bash
-bounty register --hotkey YOUR_MINER_HOTKEY
+bounty wizard
 ```
 
-This opens GitHub OAuth in your browser. After authorizing, your account is linked to your hotkey. **This is the only action required from miners.**
+The wizard will:
+1. Ask for your miner **secret key** (64-char hex or 12+ word mnemonic)
+2. Derive your **hotkey** (SS58 format)
+3. Ask for your **GitHub username**
+4. Sign the registration with sr25519
+5. Submit to the platform
 
-### Step 2: Create Valid Issues
+### Create Valid Issues
 
-Go to [PlatformNetwork/fabric/issues](https://github.com/PlatformNetwork/fabric/issues) and create:
+> **WARNING**: Issues must be created in **this repository** to be eligible for rewards!
+
+Go to the bounty-challenge repository and create issues:
+
+| Repository | URL |
+|------------|-----|
+| **CortexLM/bounty-challenge** | https://github.com/CortexLM/bounty-challenge/issues |
+
+You can report issues about any Cortex project (Cortex CLI, Fabric, etc.) but they must be submitted HERE to count for rewards.
+
+Valid issue types:
 
 | Type | Description |
 |------|-------------|
@@ -170,15 +177,19 @@ Go to [PlatformNetwork/fabric/issues](https://github.com/PlatformNetwork/fabric/
 | **Feature Requests** | Use cases and proposed solutions |
 | **Documentation** | Gaps, errors, or improvements |
 
-### Step 3: Wait for Validation
+### Wait for Validation
 
 Maintainers will review your issue:
-- ✅ **Valid**: Closed with `valid` label → Bounty auto-credited
+- ✅ **Valid**: Closed with `valid` label → Reward auto-credited
 - ❌ **Invalid**: Closed without label → No reward
 
-### Step 4: Bounties Are Automatic!
+**Note:** Only maintainers can add/remove the `valid` label. This is enforced via GitHub Actions.
 
-**No manual claiming needed.** Validators automatically scan GitHub for valid issues and credit bounties to the registered miner.
+### Check Your Status
+
+```bash
+bounty status --hotkey YOUR_HOTKEY
+```
 
 ### View Leaderboard
 
@@ -186,96 +197,122 @@ Maintainers will review your issue:
 bounty leaderboard
 ```
 
-### Check Your Status & Bounties
+## CLI Commands
 
-```bash
-bounty status --hotkey YOUR_HOTKEY
-```
+| Command | Description |
+|---------|-------------|
+| `bounty` | Interactive registration wizard (default) |
+| `bounty wizard` | Same as above |
+| `bounty status -h <hotkey>` | Check your status and rewards |
+| `bounty leaderboard` | View current standings |
+| `bounty config` | Show challenge configuration |
+| `bounty server` | Run in server mode (subnet operators) |
+| `bounty validate` | Run as validator (auto-scan) |
 
-## Scoring Overview
+### Environment Variables
 
-### Bounty Score
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PLATFORM_URL` | `https://chain.platform.network` | Platform server URL |
+| `DATABASE_URL` | - | PostgreSQL connection (server mode) |
+| `GITHUB_TOKEN` | - | GitHub API token (increases rate limits) |
+| `MINER_HOTKEY` | - | Your miner hotkey (SS58) |
 
-Each valid issue contributes to your score using logarithmic scaling:
+## Where to Submit Issues
 
-$$S = \frac{\ln(1 + n)}{\ln(2) \times 10}$$
+> **IMPORTANT**: All issues must be submitted to this repository to receive rewards.
 
-Where $n$ is the total number of valid issues claimed.
+| Repository | URL | Status |
+|------------|-----|--------|
+| **CortexLM/bounty-challenge** | https://github.com/CortexLM/bounty-challenge/issues | ✅ Rewards eligible |
+| CortexLM/cortex | https://github.com/CortexLM/cortex | ❌ Not counted |
+| CortexLM/fabric | https://github.com/CortexLM/fabric | ❌ Not counted |
 
-| Valid Issues | Score |
-|--------------|-------|
-| 1 | 0.100 |
-| 5 | 0.258 |
-| 10 | 0.346 |
-| 50 | 0.565 |
-| 100 | 0.666 |
-
-### Weight Calculation
-
-Miner weights are proportional to scores:
-
-$$w_i = \frac{S_i}{\sum_j S_j}$$
-
-See [Scoring Documentation](docs/scoring.md) for complete specifications.
+Report bugs, security issues, or feature requests about ANY Cortex project in the bounty-challenge repo.
 
 ## Anti-Abuse Mechanisms
 
 | Mechanism | Description |
 |-----------|-------------|
 | **Valid Label Required** | Only issues closed with `valid` label count |
+| **Signature Verification** | sr25519 signature proves hotkey ownership |
 | **Author Verification** | GitHub username must match issue author |
-| **First Reporter Wins** | Each bug can only be claimed once - no duplicates |
-| **Logarithmic Scoring** | Diminishing returns prevent mass spam |
+| **First Reporter Wins** | Each issue can only be claimed once |
+| **Adaptive Weights** | High activity reduces per-issue reward |
 | **Maintainer Gatekeeping** | Only project members can validate issues |
-| **GitHub API Verification** | Real-time verification of issue status |
+| **Label Protection** | GitHub Actions prevent unauthorized label changes |
 
 ## API Reference
 
-### Endpoints
+### Bridge API Endpoints
+
+All requests go through the platform bridge:
+
+```
+https://chain.platform.network/api/v1/bridge/bounty-challenge/
+```
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/health` | GET | Health check and server status |
-| `/config` | GET | Challenge configuration schema |
-| `/evaluate` | POST | Register, claim bounties, view leaderboard |
-| `/validate` | POST | Validate request before submission |
+| `/register` | POST | Register GitHub username with hotkey |
+| `/status/{hotkey}` | GET | Get miner status and rewards |
+| `/leaderboard` | GET | Get current standings |
+| `/stats` | GET | Get challenge statistics |
 
-### Actions
+### Direct Server Endpoints
 
-| Action | Description |
-|--------|-------------|
-| `register` | Link GitHub username to miner hotkey |
-| `claim` | Claim bounties for validated issues |
-| `leaderboard` | View current miner standings |
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Health check |
+| `/config` | GET | Challenge configuration |
+| `/get_weights` | GET | Calculate current weights |
 
-See [API Reference](docs/api-reference.md) for complete documentation.
+See [API Reference](docs/reference/api-reference.md) for complete documentation.
 
 ## Project Structure
 
 ```
 bounty-challenge/
 ├── src/
-│   ├── main.rs           # Server entry point
-│   ├── lib.rs            # Library exports
-│   ├── challenge.rs      # ServerChallenge implementation
-│   ├── github.rs         # GitHub API client
-│   ├── storage.rs        # SQLite storage layer
-│   └── migrations.rs     # Database migration system
+│   ├── main.rs              # Server entry point
+│   ├── lib.rs               # Library exports
+│   ├── challenge.rs         # Challenge implementation
+│   ├── github.rs            # GitHub API client
+│   ├── pg_storage.rs        # PostgreSQL storage
+│   ├── storage.rs           # SQLite storage (CLI)
+│   ├── server.rs            # HTTP server & routes
+│   ├── discovery.rs         # Auto-scan for valid issues
+│   └── bin/bounty/          # CLI application
+│       ├── main.rs          # CLI entry point
+│       ├── client.rs        # Bridge API client
+│       ├── wizard/          # Registration wizard
+│       └── commands/        # CLI commands
 ├── migrations/
-│   └── 001_initial.sql   # Initial database schema
+│   ├── 001_initial.sql      # SQLite schema
+│   └── 002_rewards_schema.sql # PostgreSQL schema
 ├── docs/
-│   ├── getting-started.md
-│   ├── api-reference.md
-│   ├── scoring.md
-│   └── anti-abuse.md
-├── examples/
-│   └── claim_bounty.sh
-├── scripts/
-│   └── setup.sh
-├── assets/
-│   └── banner.jpg
-└── tests/
+│   ├── miner/               # Miner guides
+│   ├── reference/           # API references
+│   └── validator/           # Validator guides
+├── .github/workflows/
+│   └── protect-valid-label.yml # Label protection
+├── config.toml              # Configuration
+└── assets/
+    └── banner.jpg           # Banner image
 ```
+
+## Documentation
+
+- **For Miners:**
+  - [Getting Started](docs/miner/getting-started.md)
+  - [Registration Guide](docs/miner/registration.md)
+
+- **For Validators:**
+  - [Setup Guide](docs/validator/setup.md)
+
+- **Reference:**
+  - [Scoring & Rewards](docs/reference/scoring.md)
+  - [API Reference](docs/reference/api-reference.md)
 
 ## Development
 
@@ -310,12 +347,12 @@ cargo check
 
 ## Platform Integration
 
-When deployed as a Platform challenge:
+When deployed as a Platform challenge module:
 
 ```
 ┌─────────────────┐     ┌──────────────────────┐
 │     Miner       │────▶│   Platform Server    │
-│   (claims)      │     │ (chain.platform.net) │
+│   (CLI/wizard)  │     │ (chain.platform.net) │
 └─────────────────┘     │                      │
                         │    ┌──────────┐      │
 ┌─────────────────┐     │    │PostgreSQL│      │
@@ -324,17 +361,9 @@ When deployed as a Platform challenge:
 └─────────────────┘     └──────────────────────┘
 ```
 
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing`)
-5. Open a Pull Request
-
 ## Acknowledgments
 
-- [PlatformNetwork](https://github.com/PlatformNetwork) for the fabric repository
+- [Cortex Foundation](https://github.com/CortexLM) for the Cortex ecosystem
 - [Platform Network](https://github.com/PlatformNetwork) for the challenge SDK
 - [Bittensor](https://bittensor.com/) for the decentralized AI network
 

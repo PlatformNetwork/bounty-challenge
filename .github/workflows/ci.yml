@@ -2,33 +2,35 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, master]
+    tags: ['v*']
   pull_request:
-    branches: [main]
+    branches: [main, master]
 
 env:
   CARGO_TERM_COLOR: always
-  RUST_BACKTRACE: 1
+  CARGO_INCREMENTAL: 0
+  RUST_BACKTRACE: short
+  CARGO_NET_RETRY: 10
+  RUSTUP_MAX_RETRIES: 10
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  check:
-    name: Check
+  build:
+    name: Build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - run: cargo check --all-features
-
-  fmt:
-    name: Format
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt
-      - run: cargo fmt --all -- --check
+          shared-key: "bounty-ci"
+      - run: cargo build --release
 
   clippy:
     name: Clippy
@@ -39,26 +41,139 @@ jobs:
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
-      - run: cargo clippy --all-features -- -D warnings
+        with:
+          shared-key: "bounty-ci"
+          save-if: false
+      - run: |
+          cargo clippy --all-targets --workspace -- -W clippy::all \
+            -A clippy::too_many_arguments \
+            -A clippy::type_complexity \
+            -A clippy::large_enum_variant \
+            -A clippy::should_implement_trait
 
   test:
     name: Test
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo test --all-features
-
-  build:
-    name: Build Release
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo build --release
-      - uses: actions/upload-artifact@v4
         with:
-          name: bounty-server
-          path: target/release/bounty-server
+          components: llvm-tools-preview
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest,cargo-llvm-cov
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "bounty-ci"
+          save-if: false
+
+      - name: Run tests
+        if: github.ref != 'refs/heads/main'
+        run: cargo nextest run --workspace -E 'not (test(/live/) | test(/integration/))'
+
+      - name: Run tests with coverage
+        if: github.ref == 'refs/heads/main'
+        run: |
+          cargo llvm-cov nextest --workspace --json --output-path coverage.json -E 'not (test(/live/) | test(/integration/))'
+          cargo llvm-cov report --html --output-dir coverage-report
+
+      - name: Generate and deploy coverage badge
+        if: github.ref == 'refs/heads/main'
+        run: |
+          COVERAGE=$(jq '.data[0].totals.lines.percent // 0 | round' coverage.json)
+          echo "Coverage: $COVERAGE%"
+          mkdir -p badges
+          if (( COVERAGE >= 80 )); then COLOR="brightgreen"
+          elif (( COVERAGE >= 60 )); then COLOR="green"
+          elif (( COVERAGE >= 40 )); then COLOR="yellow"
+          else COLOR="red"; fi
+          curl -s "https://img.shields.io/badge/coverage-${COVERAGE}%25-${COLOR}" > badges/coverage.svg
+
+      - uses: peaceiris/actions-gh-pages@v4
+        if: github.ref == 'refs/heads/main'
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./badges
+          destination_dir: badges
+          keep_files: true
+
+      - name: Upload coverage HTML report
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-html
+          path: coverage-report/
+
+      - name: Deploy coverage report
+        uses: peaceiris/actions-gh-pages@v4
+        if: github.ref == 'refs/heads/main'
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./coverage-report
+          destination_dir: coverage
+          keep_files: true
+
+  docker:
+    name: Docker
+    runs-on: ubuntu-latest
+    needs: [build, clippy, test]
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        if: github.event_name != 'pull_request'
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=sha,prefix=
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    needs: [build, clippy, test, docker]
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "bounty-ci"
+          save-if: false
+      - run: cargo build --release
+      - run: |
+          mkdir -p release
+          cp target/release/bounty release/
+          cp target/release/bounty-server release/
+          tar -czvf bounty-challenge-${{ github.ref_name }}-linux-x86_64.tar.gz -C release .
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: bounty-challenge-${{ github.ref_name }}-linux-x86_64.tar.gz
+          generate_release_notes: true

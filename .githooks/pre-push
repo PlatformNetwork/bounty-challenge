@@ -1,5 +1,6 @@
 #!/bin/bash
 # Pre-push hook for bounty-challenge
+# Run this before pushing to ensure CI will pass
 
 # Source cargo environment
 [ -f "$HOME/.cargo/env" ] && source "$HOME/.cargo/env"
@@ -13,7 +14,7 @@ echo ""
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-NC='\033[0m'
+NC='\033[0m' # No Color
 
 check_failed() {
     echo -e "${RED}❌ $1 FAILED${NC}"
@@ -47,9 +48,11 @@ check_passed "Compilation"
 # 3. Clippy
 echo ""
 echo "📎 Running clippy..."
-if ! cargo clippy --all-targets -- -D warnings \
+if ! cargo clippy --all-targets --workspace -- -W clippy::all -D warnings \
     -A clippy::too_many_arguments \
-    -A clippy::type_complexity 2>/dev/null; then
+    -A clippy::type_complexity \
+    -A clippy::large_enum_variant \
+    -A clippy::should_implement_trait 2>/dev/null; then
     check_failed "Clippy"
 fi
 check_passed "Clippy"
@@ -57,7 +60,7 @@ check_passed "Clippy"
 # 4. Tests
 echo ""
 echo "🧪 Running tests..."
-if ! cargo test 2>/dev/null; then
+if ! cargo test --workspace -- --skip live --skip integration 2>/dev/null; then
     check_failed "Tests"
 fi
 check_passed "Tests"

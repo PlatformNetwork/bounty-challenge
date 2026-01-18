@@ -5,16 +5,31 @@
 client_id = "Ov23liAkfvnMhA6C68iy"
 
 # Target repository for bounties
+# IMPORTANT: Only issues in bounty-challenge count for rewards
+[[github.repos]]
 owner = "CortexLM"
-repo = "fabric"
+repo = "bounty-challenge"
 
 [server]
 host = "0.0.0.0"
 port = 8080
 
 [database]
-path = "bounty.db"
+# SQLite for local CLI cache
+sqlite_path = "bounty.db"
+# PostgreSQL URL from platform-challenge (env: DATABASE_URL)
+# postgres_url = "postgres://user:pass@host:5432/dbname"
+
+[rewards]
+# Maximum issues per day for full emission (weight = 1.0)
+max_issues_for_full_emission = 250
+# Base weight per resolved issue
+base_weight_per_issue = 0.01
+# Threshold after which weight per issue decreases adaptively
+adaptation_threshold = 100
+# Label required on issues to count as valid
+valid_label = "valid"
 
 [scoring]
-# Logarithmic scoring: score = log2(1 + n) / divisor
+# Logarithmic scoring: score = log2(1 + n) / divisor (legacy)
 divisor = 10.0

@@ -1,0 +1,90 @@
+name: Protect Valid Label
+
+on:
+  issues:
+    types: [labeled, unlabeled]
+
+jobs:
+  protect-label:
+    if: github.event.label.name == 'valid'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    
+    steps:
+      - name: Check actor permissions
+        id: check
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // List of users allowed to manage the 'valid' label
+            // Add maintainer usernames here
+            const ALLOWED_USERS = [
+              'cortex-admin',
+              'maintainer1',
+              'maintainer2'
+              // Add more maintainers as needed
+            ];
+            
+            const actor = context.actor;
+            const eventAction = context.payload.action; // 'labeled' or 'unlabeled'
+            const issueNumber = context.payload.issue.number;
+            
+            console.log(`Actor: ${actor}`);
+            console.log(`Action: ${eventAction}`);
+            console.log(`Issue: #${issueNumber}`);
+            
+            // Check if actor is allowed
+            if (ALLOWED_USERS.includes(actor)) {
+              console.log(`✅ ${actor} is authorized to ${eventAction} the 'valid' label`);
+              return;
+            }
+            
+            // Check if actor is a collaborator with admin/maintain permissions
+            try {
+              const { data: permission } = await github.rest.repos.getCollaboratorPermissionLevel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                username: actor
+              });
+              
+              if (['admin', 'maintain'].includes(permission.permission)) {
+                console.log(`✅ ${actor} has ${permission.permission} permission`);
+                return;
+              }
+            } catch (e) {
+              console.log(`Could not check permissions: ${e.message}`);
+            }
+            
+            // Unauthorized - revert the label change
+            console.log(`❌ ${actor} is NOT authorized to modify the 'valid' label`);
+            
+            if (eventAction === 'labeled') {
+              // Remove the label that was just added
+              await github.rest.issues.removeLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                name: 'valid'
+              });
+              console.log(`Removed 'valid' label from issue #${issueNumber}`);
+            } else if (eventAction === 'unlabeled') {
+              // Re-add the label that was just removed
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                labels: ['valid']
+              });
+              console.log(`Re-added 'valid' label to issue #${issueNumber}`);
+            }
+            
+            // Add a comment explaining the revert
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              body: `⚠️ **Label Protection**: The \`valid\` label can only be modified by authorized maintainers. Your change has been reverted.\n\nIf you believe this issue should have the \`valid\` label, please contact a maintainer.`
+            });
+            
+            core.setFailed(`Unauthorized label modification by ${actor}`);

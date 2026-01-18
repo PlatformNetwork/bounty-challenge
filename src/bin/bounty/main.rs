@@ -2,8 +2,10 @@
 //!
 //! Command-line interface for the Bounty Challenge.
 
+mod client;
 mod commands;
 mod style;
+mod wizard;
 
 use clap::{Parser, Subcommand};
 use style::*;
@@ -30,8 +32,8 @@ struct Cli {
     #[arg(
         short,
         long,
-        env = "BOUNTY_RPC",
-        default_value = "http://localhost:8080",
+        env = "PLATFORM_URL",
+        default_value = "https://chain.platform.network",
         global = true
     )]
     rpc: String,
@@ -41,11 +43,15 @@ struct Cli {
     verbose: bool,
 
     #[command(subcommand)]
-    command: Commands,
+    command: Option<Commands>,
 }
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Interactive registration wizard - link GitHub to your hotkey (default)
+    #[command(visible_aliases = ["w", "register", "r"])]
+    Wizard,
+
     /// Run as server (for subnet operators)
     #[command(visible_alias = "s")]
     Server {
@@ -57,7 +63,7 @@ enum Commands {
         #[arg(short, long, env = "CHALLENGE_PORT", default_value = "8080")]
         port: u16,
 
-        /// Database path
+        /// Database path (SQLite for local cache)
         #[arg(long, env = "BOUNTY_DB_PATH", default_value = "bounty.db")]
         db: String,
     },
@@ -78,14 +84,6 @@ enum Commands {
         hotkey: Option<String>,
     },
 
-    /// Register your GitHub account (opens browser for OAuth)
-    #[command(visible_alias = "r")]
-    Register {
-        /// Your miner hotkey (SS58 format)
-        #[arg(short, long, env = "MINER_HOTKEY")]
-        hotkey: String,
-    },
-
     /// View the leaderboard
     #[command(visible_alias = "lb")]
     Leaderboard {
@@ -95,6 +93,7 @@ enum Commands {
     },
 
     /// Check your status and bounties
+    #[command(visible_alias = "st")]
     Status {
         /// Your miner hotkey
         #[arg(short, long, env = "MINER_HOTKEY")]
@@ -113,13 +112,16 @@ async fn main() {
         tracing_subscriber::fmt().with_env_filter("info").init();
     }
 
-    let result = match cli.command {
+    // Default to wizard if no command specified
+    let command = cli.command.unwrap_or(Commands::Wizard);
+
+    let result = match command {
+        Commands::Wizard => wizard::run_register_wizard(&cli.rpc).await,
         Commands::Server { host, port, db } => {
             print_banner();
             commands::server::run(&host, port, &db).await
         }
         Commands::Validate { platform, hotkey } => commands::validate::run(&platform, hotkey).await,
-        Commands::Register { hotkey } => commands::register::run(&cli.rpc, &hotkey).await,
         Commands::Leaderboard { limit } => commands::leaderboard::run(&cli.rpc, limit).await,
         Commands::Status { hotkey } => commands::status::run(&cli.rpc, &hotkey).await,
         Commands::Config => commands::config::run(&cli.rpc).await,

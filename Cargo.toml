@@ -37,6 +37,7 @@ uuid = { version = "1.10", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 sha2 = "0.10"
 hex = "0.4"
+bs58 = "0.5"
 
 # Error handling
 anyhow = "1.0"
@@ -46,11 +47,22 @@ thiserror = "2.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
-# Database (local cache)
+# Database (local cache for CLI)
 rusqlite = { version = "0.32", features = ["bundled"] }
+
+# PostgreSQL (server mode - params from platform-challenge)
+tokio-postgres = { version = "0.7", features = ["with-chrono-0_4", "with-serde_json-1"] }
+deadpool-postgres = "0.14"
+postgres-types = { version = "0.2", features = ["derive"] }
 
 # CLI
 clap = { version = "4.5", features = ["derive", "env"] }
+
+# Interactive CLI (like term-challenge)
+dialoguer = { version = "0.11", features = ["password"] }
+console = "0.15"
+indicatif = "0.17"
+colored = "2.1"
 
 # Web server
 axum = { version = "0.7", features = ["json"] }
