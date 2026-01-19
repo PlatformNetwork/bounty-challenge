@@ -162,12 +162,12 @@ Earn extra credits by starring our repositories!
 
 Analyze these projects to find bugs, security issues, and improvements:
 
-| Repository | Description | URL |
-|------------|-------------|-----|
-| **CortexLM/cortex** | Cortex CLI and core | https://github.com/CortexLM/cortex |
-| **CortexLM/vgrep** | Visual grep tool | https://github.com/CortexLM/vgrep |
-| **PlatformNetwork/platform** | Platform network infrastructure | https://github.com/PlatformNetwork/platform |
-| **PlatformNetwork/term-challenge** | Terminal challenge system | https://github.com/PlatformNetwork/term-challenge |
+| Repository | Description | Points | URL |
+|------------|-------------|--------|-----|
+| **CortexLM/cortex** | Cortex CLI and core | **4.0x** | https://github.com/CortexLM/cortex |
+| **CortexLM/vgrep** | Visual grep tool | **1.0x** | https://github.com/CortexLM/vgrep |
+
+> **Note:** Points multiplier affects your weight reward. A valid issue in cortex gives 4x more weight than vgrep!
 
 > **Important:** Analyze the repositories above for bugs, then submit your issue reports to **this repository** ([PlatformNetwork/bounty-challenge](https://github.com/PlatformNetwork/bounty-challenge/issues)) to receive rewards.
 

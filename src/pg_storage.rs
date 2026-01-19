@@ -327,6 +327,20 @@ impl PgStorage {
         Ok(())
     }
 
+    /// Get multiplier for a repository (defaults to 1.0 if not found)
+    pub async fn get_repo_multiplier(&self, owner: &str, repo: &str) -> Result<f64> {
+        let client = self.pool.get().await?;
+
+        let row = client
+            .query_opt(
+                "SELECT multiplier FROM target_repos WHERE owner = $1 AND repo = $2",
+                &[&owner, &repo],
+            )
+            .await?;
+
+        Ok(row.map(|r| r.get::<_, f32>(0) as f64).unwrap_or(1.0))
+    }
+
     // ========================================================================
     // RESOLVED ISSUES
     // ========================================================================
@@ -347,13 +361,16 @@ impl PgStorage {
         // Get hotkey if registered
         let hotkey = self.get_hotkey_by_github(github_username).await?;
 
+        // Get repo multiplier (cortex=4.0, vgrep=1.0, platform/term=0.5)
+        let multiplier = self.get_repo_multiplier(repo_owner, repo_name).await?;
+
         // Calculate weight at time of resolution
         let weight = self.calculate_issue_weight().await?;
 
         let result = client
             .execute(
-                "INSERT INTO resolved_issues (issue_id, repo_owner, repo_name, github_username, hotkey, issue_url, issue_title, resolved_at, weight_attributed)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                "INSERT INTO resolved_issues (issue_id, repo_owner, repo_name, github_username, hotkey, issue_url, issue_title, resolved_at, weight_attributed, multiplier)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
                  ON CONFLICT (repo_owner, repo_name, issue_id) DO NOTHING",
                 &[
                     &issue_id,
@@ -365,14 +382,15 @@ impl PgStorage {
                     &issue_title,
                     &resolved_at,
                     &(weight as f32),
+                    &(multiplier as f32),
                 ],
             )
             .await?;
 
         if result > 0 {
             info!(
-                "Recorded issue #{} from {}/{} by {} (weight: {:.4})",
-                issue_id, repo_owner, repo_name, github_username, weight
+                "Recorded issue #{} from {}/{} by {} (weight: {:.4}, multiplier: {}x)",
+                issue_id, repo_owner, repo_name, github_username, weight, multiplier
             );
             Ok(true)
         } else {
@@ -943,17 +961,20 @@ impl PgStorage {
                 warn!("Issue #{} in {}/{} LOST valid label", issue.number, repo_owner, repo_name);
             }
             LabelChange::BecameValid => {
-                info!("Issue #{} in {}/{} marked as VALID - auto-crediting to user @{}", 
-                      issue.number, repo_owner, repo_name, issue.user.login);
+                // Get repo multiplier for weighted rewards
+                let multiplier = self.get_repo_multiplier(repo_owner, repo_name).await.unwrap_or(1.0);
                 
-                // Auto-credit: add to resolved_issues
+                info!("Issue #{} in {}/{} marked as VALID - auto-crediting to user @{} ({}x)", 
+                      issue.number, repo_owner, repo_name, issue.user.login, multiplier);
+                
+                // Auto-credit: add to resolved_issues with multiplier
                 let hotkey = self.get_hotkey_by_github(&issue.user.login).await.ok().flatten();
                 let resolved_at = issue.closed_at.unwrap_or(issue.updated_at);
                 
                 client
                     .execute(
-                        "INSERT INTO resolved_issues (issue_id, repo_owner, repo_name, github_username, hotkey, issue_url, issue_title, resolved_at, weight_attributed)
-                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 0.01)
+                        "INSERT INTO resolved_issues (issue_id, repo_owner, repo_name, github_username, hotkey, issue_url, issue_title, resolved_at, weight_attributed, multiplier)
+                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 0.01, $9)
                          ON CONFLICT (repo_owner, repo_name, issue_id) DO NOTHING",
                         &[
                             &(issue.number as i64),
@@ -964,6 +985,7 @@ impl PgStorage {
                             &issue.html_url,
                             &issue.title,
                             &resolved_at,
+                            &(multiplier as f32),
                         ],
                     )
                     .await?;
