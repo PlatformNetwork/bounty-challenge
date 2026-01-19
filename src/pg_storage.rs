@@ -69,8 +69,8 @@ pub struct RewardSnapshot {
 pub struct CurrentWeight {
     pub github_username: String,
     pub hotkey: String,
-    pub issues_resolved_24h: i32,
-    pub total_issues_24h: i32,
+    pub issues_resolved_24h: i64,
+    pub total_issues_24h: i64,
     pub weight: f64,
     #[serde(default)]
     pub is_penalized: bool,
