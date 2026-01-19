@@ -105,9 +105,9 @@ pub struct InvalidIssue {
 pub struct UserBalance {
     pub hotkey: String,
     pub github_username: String,
-    pub valid_count: i32,
-    pub invalid_count: i32,
-    pub balance: i32,
+    pub valid_count: i64,
+    pub invalid_count: i64,
+    pub balance: i64,
     pub is_penalized: bool,
 }
 
@@ -520,7 +520,7 @@ impl PgStorage {
         // Get user's total points (SUM of multipliers) in last 24h
         let user_row = client
             .query_one(
-                "SELECT COALESCE(SUM(multiplier), 0) FROM resolved_issues 
+                "SELECT COALESCE(SUM(multiplier)::FLOAT8, 0) FROM resolved_issues 
                  WHERE hotkey = $1 AND resolved_at >= NOW() - INTERVAL '24 hours'",
                 &[&hotkey],
             )
@@ -1483,9 +1483,9 @@ pub struct HotkeyDetails {
     pub hotkey: String,
     pub github_username: String,
     pub registered_at: DateTime<Utc>,
-    pub valid_issues: i32,
-    pub invalid_issues: i32,
-    pub balance: i32,
+    pub valid_issues: i64,
+    pub invalid_issues: i64,
+    pub balance: i64,
     pub is_penalized: bool,
     pub weight: f64,
     pub recent_issues: Vec<CachedIssueShort>,

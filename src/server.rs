@@ -328,9 +328,9 @@ async fn register_handler(
 pub struct StatusResponse {
     pub registered: bool,
     pub github_username: Option<String>,
-    pub valid_issues_count: Option<u32>,
-    pub invalid_issues_count: Option<u32>,
-    pub balance: Option<i32>,
+    pub valid_issues_count: Option<u64>,
+    pub invalid_issues_count: Option<u64>,
+    pub balance: Option<i64>,
     pub is_penalized: bool,
     pub weight: Option<f64>,
 }
@@ -362,7 +362,7 @@ async fn status_handler(
             let weight = if b.is_penalized { 0.0 } else {
                 state.storage.calculate_user_weight(&hotkey).await.unwrap_or(0.0)
             };
-            (b.valid_count as u32, b.invalid_count as u32, b.balance, b.is_penalized, weight)
+            (b.valid_count as u64, b.invalid_count as u64, b.balance, b.is_penalized, weight)
         }
         None => (0, 0, 0, false, 0.0)
     };
