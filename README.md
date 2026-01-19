@@ -16,7 +16,7 @@
 
 Bounty Challenge is a decentralized issue reward system on the Bittensor network. Miners earn TAO rewards by discovering and reporting valid issues. Issues must be closed with the `valid` label by project maintainers to qualify for rewards.
 
-> **IMPORTANT**: To receive rewards, you MUST submit issues in **this repository** ([PlatformNetwork/bounty-challenge](https://github.com/PlatformNetwork/bounty-challenge/issues)). Issues submitted to other repositories (CortexLM/cortex, CortexLM/fabric, etc.) will **NOT** be counted for rewards.
+> **IMPORTANT**: To receive rewards, you MUST submit issues in **this repository** ([PlatformNetwork/bounty-challenge](https://github.com/PlatformNetwork/bounty-challenge/issues)). Issues submitted directly to other repositories will **NOT** be counted for rewards.
 
 ## Quick Links
 
@@ -168,9 +168,8 @@ Analyze these projects to find bugs, security issues, and improvements:
 | **CortexLM/vgrep** | Visual grep tool | https://github.com/CortexLM/vgrep |
 | **PlatformNetwork/platform** | Platform network infrastructure | https://github.com/PlatformNetwork/platform |
 | **PlatformNetwork/term-challenge** | Terminal challenge system | https://github.com/PlatformNetwork/term-challenge |
-| **PlatformNetwork/bounty-challenge** | This repository | https://github.com/PlatformNetwork/bounty-challenge |
 
-> **Important:** While you analyze these repositories for bugs, you must submit your issue reports to **this repository** ([PlatformNetwork/bounty-challenge](https://github.com/PlatformNetwork/bounty-challenge/issues)) to receive rewards.
+> **Important:** Analyze the repositories above for bugs, then submit your issue reports to **this repository** ([PlatformNetwork/bounty-challenge](https://github.com/PlatformNetwork/bounty-challenge/issues)) to receive rewards.
 
 ## Quick Start for Miners
 
@@ -226,7 +225,7 @@ Go to the bounty-challenge repository and create issues:
 |------------|-----|
 | **PlatformNetwork/bounty-challenge** | https://github.com/PlatformNetwork/bounty-challenge/issues |
 
-You can report issues about any Cortex project (Cortex CLI, Fabric, etc.) but they must be submitted HERE to count for rewards.
+You can report issues about any target project (see Target Repositories above) but they must be submitted HERE to count for rewards.
 
 Valid issue types:
 
@@ -285,10 +284,9 @@ bounty leaderboard
 | Repository | URL | Status |
 |------------|-----|--------|
 | **PlatformNetwork/bounty-challenge** | https://github.com/PlatformNetwork/bounty-challenge/issues | ✅ Rewards eligible |
-| CortexLM/cortex | https://github.com/CortexLM/cortex | ❌ Not counted |
-| CortexLM/fabric | https://github.com/CortexLM/fabric | ❌ Not counted |
+| Other repositories | - | ❌ Not counted |
 
-Report bugs, security issues, or feature requests about ANY Cortex project in the bounty-challenge repo.
+Report bugs, security issues, or feature requests about any target project in the bounty-challenge repo.
 
 ## Anti-Abuse Mechanisms
 
