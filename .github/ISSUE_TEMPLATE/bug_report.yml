@@ -100,19 +100,13 @@ body:
       required: true
 
   - type: dropdown
-    id: component
+    id: project
     attributes:
-      label: Component
-      description: Which component is affected?
+      label: Project
+      description: Which project is affected?
       options:
-        - CLI (bounty command)
-        - Server (bounty-server)
-        - API Endpoints
-        - Registration/OAuth
-        - Reward Calculation
-        - Database/Storage
-        - Documentation
-        - Other
+        - cortex
+        - vgrep
     validations:
       required: true
 

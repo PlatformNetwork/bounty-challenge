@@ -5,7 +5,6 @@
 use std::sync::Arc;
 
 use bounty_challenge::{BountyChallenge, PgStorage};
-use platform_challenge_sdk::server::{ChallengeServer, ServerConfig};
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 
@@ -30,15 +29,17 @@ async fn main() -> anyhow::Result<()> {
     info!("PostgreSQL storage initialized");
 
     // Create challenge
-    let challenge = BountyChallenge::new_with_storage(storage.clone());
+    let challenge = Arc::new(BountyChallenge::new_with_storage(storage.clone()));
 
-    // Build and run server
-    let config = ServerConfig::from_env();
-    info!("Server will listen on {}:{}", config.host, config.port);
+    // Get server config from environment
+    let host = std::env::var("CHALLENGE_HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
+    let port: u16 = std::env::var("CHALLENGE_PORT")
+        .ok()
+        .and_then(|p| p.parse().ok())
+        .unwrap_or(8080);
 
-    let server = ChallengeServer::builder(challenge).config(config).build();
-
-    server.run().await?;
+    // Run our custom server with all endpoints
+    bounty_challenge::server::run_server(&host, port, challenge, storage).await?;
 
     Ok(())
 }

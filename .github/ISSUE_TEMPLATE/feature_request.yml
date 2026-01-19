@@ -48,17 +48,13 @@ body:
       required: false
 
   - type: dropdown
-    id: component
+    id: project
     attributes:
-      label: Component
-      description: Which component would this feature affect?
+      label: Project
+      description: Which project would this feature affect?
       options:
-        - CLI (bounty command)
-        - Server (bounty-server)
-        - API Endpoints
-        - Reward System
-        - Documentation
-        - Other
+        - cortex
+        - vgrep
     validations:
       required: true
 
