@@ -9,7 +9,7 @@ use bounty_challenge::{BountyChallenge, PgStorage};
 use tracing::{error, info, warn};
 use tracing_subscriber::EnvFilter;
 
-const SYNC_INTERVAL_SECS: u64 = 300; // 5 minutes
+const SYNC_INTERVAL_SECS: u64 = 600; // 10 minutes
 const STAR_SYNC_INTERVAL_SECS: u64 = 1800; // 30 minutes
 
 #[tokio::main]
