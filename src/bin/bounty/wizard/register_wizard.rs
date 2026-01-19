@@ -156,7 +156,7 @@ pub async fn run_register_wizard(platform_url: &str) -> Result<()> {
                 println!("  {}", style("Next steps:").bold());
                 println!(
                     "    1. Create issues on {}",
-                    style("https://github.com/CortexLM/cortex").cyan()
+                    style("https://github.com/PlatformNetwork/bounty-challenge").cyan()
                 );
                 println!(
                     "    2. Wait for maintainers to add the '{}' label",

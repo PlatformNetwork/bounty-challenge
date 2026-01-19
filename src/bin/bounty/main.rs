@@ -80,7 +80,7 @@ enum Commands {
         platform: String,
 
         /// Validator hotkey
-        #[arg(short, long, env = "VALIDATOR_HOTKEY")]
+        #[arg(short = 'k', long, env = "VALIDATOR_HOTKEY")]
         hotkey: Option<String>,
     },
 
@@ -96,7 +96,7 @@ enum Commands {
     #[command(visible_alias = "st")]
     Status {
         /// Your miner hotkey
-        #[arg(short, long, env = "MINER_HOTKEY")]
+        #[arg(short = 'k', long, env = "MINER_HOTKEY")]
         hotkey: String,
     },
 
