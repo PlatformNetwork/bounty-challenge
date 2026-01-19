@@ -97,13 +97,17 @@ $$w_{issue} = \begin{cases}
 
 ### User Weight Calculation
 
-Your total weight is your issues multiplied by the current per-issue weight:
+Your total weight is your issues multiplied by the current per-issue weight, plus any star bonus:
 
-$$W_{user} = \min(n_{user} \times w_{issue}, W_{max})$$
+$$W_{user} = \min(n_{user} \times w_{issue}, W_{max}) + W_{stars}$$
 
-**Example:** With 200 issues/day globally, if you resolve 10 issues:
+Where $W_{stars} = 0.25 \times n_{stars}$ if you have at least 2 valid issues, otherwise $0$.
+
+**Example:** With 200 issues/day globally, if you resolve 10 issues and starred 3 repos:
 - Weight per issue: 0.005
-- Your weight: 10 × 0.005 = 0.05 (5%)
+- Base weight: 10 × 0.005 = 0.05 (5%)
+- Star bonus: 3 × 0.25 = 0.75
+- Total weight: 0.05 + 0.75 = 0.80
 
 See [Scoring Documentation](docs/reference/scoring.md) for complete specifications.
 
@@ -129,6 +133,44 @@ weight = balance >= 0 ? normal_weight : 0
 |-------|-------|---------|---------|--------|
 | A | 5 | 3 | +2 | 0.05 |
 | B | 3 | 5 | -2 | 0.00 (penalized) |
+
+### Star Bonus
+
+Earn extra credits by starring our repositories!
+
+| Requirement | Bonus |
+|-------------|-------|
+| **Minimum** | 2 valid issues resolved |
+| **Bonus** | +0.25 weight per starred repo |
+| **Maximum** | +1.25 (5 repos × 0.25) |
+
+**Repositories to star:**
+
+| Repository | URL |
+|------------|-----|
+| CortexLM/vgrep | https://github.com/CortexLM/vgrep |
+| CortexLM/cortex | https://github.com/CortexLM/cortex |
+| PlatformNetwork/platform | https://github.com/PlatformNetwork/platform |
+| PlatformNetwork/term-challenge | https://github.com/PlatformNetwork/term-challenge |
+| PlatformNetwork/bounty-challenge | https://github.com/PlatformNetwork/bounty-challenge |
+
+**Example:**
+- Miner with 5 valid issues + 3 starred repos = base weight + 0.75 bonus
+- Miner with 1 valid issue + 5 starred repos = base weight only (need 2+ valid issues first)
+
+## Target Repositories
+
+Analyze these projects to find bugs, security issues, and improvements:
+
+| Repository | Description | URL |
+|------------|-------------|-----|
+| **CortexLM/cortex** | Cortex CLI and core | https://github.com/CortexLM/cortex |
+| **CortexLM/vgrep** | Visual grep tool | https://github.com/CortexLM/vgrep |
+| **PlatformNetwork/platform** | Platform network infrastructure | https://github.com/PlatformNetwork/platform |
+| **PlatformNetwork/term-challenge** | Terminal challenge system | https://github.com/PlatformNetwork/term-challenge |
+| **PlatformNetwork/bounty-challenge** | This repository | https://github.com/PlatformNetwork/bounty-challenge |
+
+> **Important:** While you analyze these repositories for bugs, you must submit your issue reports to **this repository** ([PlatformNetwork/bounty-challenge](https://github.com/PlatformNetwork/bounty-challenge/issues)) to receive rewards.
 
 ## Quick Start for Miners
 
