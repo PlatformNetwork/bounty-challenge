@@ -1,0 +1,103 @@
+# Label definitions for bounty-challenge
+# Use: gh label import .github/labels.yml
+
+# Type labels
+- name: bug
+  color: d73a4a
+  description: Something isn't working
+
+- name: enhancement
+  color: a2eeef
+  description: New feature or improvement
+
+- name: suggestion
+  color: 0075ca
+  description: Community suggestion
+
+- name: documentation
+  color: 0075ca
+  description: Documentation only
+
+- name: performance
+  color: fbca04
+  description: Performance related
+
+# Component labels
+- name: cortex
+  color: 5319e7
+  description: Related to Cortex integration
+
+- name: vgrep
+  color: 5319e7
+  description: Related to vgrep/validation
+
+- name: api
+  color: 1d76db
+  description: API related
+
+- name: cli
+  color: 1d76db
+  description: CLI related
+
+- name: server
+  color: 1d76db
+  description: Server related
+
+- name: database
+  color: 1d76db
+  description: Database/storage related
+
+# Priority labels
+- name: "priority: critical"
+  color: b60205
+  description: Urgent fix needed
+
+- name: "priority: high"
+  color: d93f0b
+  description: Important
+
+- name: "priority: medium"
+  color: fbca04
+  description: Normal priority
+
+- name: "priority: low"
+  color: 0e8a16
+  description: Nice to have
+
+# Status labels
+- name: needs-triage
+  color: ededed
+  description: Needs review
+
+- name: confirmed
+  color: 0e8a16
+  description: Bug confirmed
+
+- name: invalid
+  color: e4e669
+  description: Not a valid issue
+
+- name: duplicate
+  color: cfd3d7
+  description: Duplicate issue
+
+- name: wontfix
+  color: ffffff
+  description: Will not be fixed
+
+- name: "good first issue"
+  color: 7057ff
+  description: Good for newcomers
+
+- name: "help wanted"
+  color: 008672
+  description: Extra attention needed
+
+# Reward labels
+- name: valid
+  color: 0e8a16
+  description: Valid issue - eligible for reward
+
+- name: rewarded
+  color: 2ea44f
+  description: Reward has been credited

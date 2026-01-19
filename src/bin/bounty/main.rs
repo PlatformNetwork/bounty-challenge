@@ -102,6 +102,10 @@ enum Commands {
 
     /// Show challenge configuration
     Config,
+
+    /// Display system information for bug reports
+    #[command(visible_alias = "i")]
+    Info,
 }
 
 #[tokio::main]
@@ -125,6 +129,7 @@ async fn main() {
         Commands::Leaderboard { limit } => commands::leaderboard::run(&cli.rpc, limit).await,
         Commands::Status { hotkey } => commands::status::run(&cli.rpc, &hotkey).await,
         Commands::Config => commands::config::run(&cli.rpc).await,
+        Commands::Info => commands::info::run().await,
     };
 
     if let Err(e) = result {

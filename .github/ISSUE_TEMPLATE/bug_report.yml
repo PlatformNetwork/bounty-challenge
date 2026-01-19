@@ -1,0 +1,126 @@
+name: Bug Report
+description: Report a bug to help us improve Bounty Challenge
+title: "[BUG] "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Bug Report
+        Thank you for taking the time to report a bug. Please fill out the information below.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: A clear and concise description of what the bug is.
+      placeholder: Describe the bug...
+    validations:
+      required: true
+
+  - type: textarea
+    id: error-message
+    attributes:
+      label: Error Message
+      description: Paste the full error message or stack trace here.
+      render: shell
+      placeholder: |
+        Paste error output here...
+    validations:
+      required: false
+
+  - type: textarea
+    id: debug-logs
+    attributes:
+      label: Debug Logs
+      description: |
+        Run the command with `RUST_LOG=debug` and paste relevant logs.
+        Example: `RUST_LOG=debug bounty wizard`
+      render: shell
+      placeholder: |
+        Paste debug logs here...
+    validations:
+      required: false
+
+  - type: textarea
+    id: system-info
+    attributes:
+      label: System Information
+      description: |
+        Run `bounty info` and paste the output here.
+        This command collects OS, CPU, RAM, and software versions automatically.
+      render: shell
+      placeholder: |
+        $ bounty info
+        Bounty Challenge v0.1.0
+        OS: Linux 6.1.0 (Ubuntu 22.04)
+        CPU: AMD Ryzen 9 5900X (24 cores)
+        RAM: 32 GB
+        ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
+      description: If applicable, add screenshots to help explain your problem. Drag and drop images here.
+      placeholder: Drag and drop screenshots here...
+    validations:
+      required: false
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: Steps to reproduce the behavior.
+      placeholder: |
+        1. Run `bounty wizard`
+        2. Enter GitHub username
+        3. See error...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What you expected to happen.
+      placeholder: Describe expected behavior...
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      description: What actually happened.
+      placeholder: Describe actual behavior...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Which component is affected?
+      options:
+        - CLI (bounty command)
+        - Server (bounty-server)
+        - API Endpoints
+        - Registration/OAuth
+        - Reward Calculation
+        - Database/Storage
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Add any other context about the problem here.
+      placeholder: Any additional information...
+    validations:
+      required: false

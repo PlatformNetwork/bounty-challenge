@@ -1,0 +1,81 @@
+name: Performance Issue
+description: Report a performance or optimization problem
+title: "[PERF] "
+labels: ["performance", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Performance Issue
+        Report slow performance, high resource usage, or optimization opportunities.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Describe the performance issue.
+      placeholder: Describe the performance problem...
+    validations:
+      required: true
+
+  - type: textarea
+    id: system-info
+    attributes:
+      label: System Information
+      description: |
+        Run `bounty info` and paste the output here.
+      render: shell
+      placeholder: |
+        $ bounty info
+        ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: metrics
+    attributes:
+      label: Performance Metrics
+      description: |
+        Include any relevant metrics (response times, memory usage, CPU usage).
+        Use `time bounty <command>` to measure execution time.
+      render: shell
+      placeholder: |
+        $ time bounty status --hotkey 5xxx
+        real    0m5.123s
+        user    0m0.456s
+        sys     0m0.078s
+    validations:
+      required: true
+
+  - type: dropdown
+    id: issue-type
+    attributes:
+      label: Issue Type
+      description: What type of performance issue is this?
+      options:
+        - Slow response time
+        - High CPU usage
+        - High memory usage
+        - Network latency
+        - Database slow queries
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Performance
+      description: What performance do you expect?
+      placeholder: e.g., Response should be under 1 second
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Add any other context about the performance issue.
+      placeholder: Any additional information...
+    validations:
+      required: false
