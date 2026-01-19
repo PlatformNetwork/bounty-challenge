@@ -874,6 +874,9 @@ impl PgStorage {
     ) -> Result<Vec<CachedIssue>> {
         let client = self.pool.get().await?;
 
+        let limit_i64 = limit as i64;
+        let offset_i64 = offset as i64;
+
         let query = match (state, label) {
             (Some(s), Some(l)) => {
                 client.query(
@@ -883,7 +886,7 @@ impl PgStorage {
                      WHERE state = $1 AND $2 = ANY(labels)
                      ORDER BY updated_at DESC
                      LIMIT $3 OFFSET $4",
-                    &[&s, &l, &limit, &offset],
+                    &[&s, &l, &limit_i64, &offset_i64],
                 ).await?
             }
             (Some(s), None) => {
@@ -894,7 +897,7 @@ impl PgStorage {
                      WHERE state = $1
                      ORDER BY updated_at DESC
                      LIMIT $2 OFFSET $3",
-                    &[&s, &limit, &offset],
+                    &[&s, &limit_i64, &offset_i64],
                 ).await?
             }
             (None, Some(l)) => {
@@ -905,7 +908,7 @@ impl PgStorage {
                      WHERE $1 = ANY(labels)
                      ORDER BY updated_at DESC
                      LIMIT $2 OFFSET $3",
-                    &[&l, &limit, &offset],
+                    &[&l, &limit_i64, &offset_i64],
                 ).await?
             }
             (None, None) => {
@@ -915,7 +918,7 @@ impl PgStorage {
                      FROM github_issues 
                      ORDER BY updated_at DESC
                      LIMIT $1 OFFSET $2",
-                    &[&limit, &offset],
+                    &[&limit_i64, &offset_i64],
                 ).await?
             }
         };
@@ -939,6 +942,9 @@ impl PgStorage {
     pub async fn get_pending_issues(&self, limit: i32, offset: i32) -> Result<Vec<CachedIssue>> {
         let client = self.pool.get().await?;
 
+        let limit_i64 = limit as i64;
+        let offset_i64 = offset as i64;
+
         let rows = client
             .query(
                 "SELECT issue_id, repo_owner, repo_name, github_username, title, state, labels, 
@@ -946,7 +952,7 @@ impl PgStorage {
                  FROM pending_issues
                  ORDER BY updated_at DESC
                  LIMIT $1 OFFSET $2",
-                &[&limit, &offset],
+                &[&limit_i64, &offset_i64],
             )
             .await?;
 
