@@ -7,16 +7,14 @@
 ALTER TABLE target_repos ADD COLUMN IF NOT EXISTS multiplier REAL NOT NULL DEFAULT 1.0;
 
 -- Set multipliers for each repo
-UPDATE target_repos SET multiplier = 4.0 WHERE owner = 'CortexLM' AND repo = 'cortex';
-UPDATE target_repos SET multiplier = 1.0 WHERE owner = 'CortexLM' AND repo = 'vgrep';
-UPDATE target_repos SET multiplier = 0.5 WHERE owner = 'PlatformNetwork' AND repo = 'platform';
-UPDATE target_repos SET multiplier = 0.5 WHERE owner = 'PlatformNetwork' AND repo = 'term-challenge';
+UPDATE target_repos SET multiplier = 1.0 WHERE owner = 'CortexLM' AND repo = 'cortex';
+UPDATE target_repos SET multiplier = 0.25 WHERE owner = 'CortexLM' AND repo = 'vgrep';
 UPDATE target_repos SET multiplier = 1.0 WHERE owner = 'PlatformNetwork' AND repo = 'bounty-challenge';
 
 -- Insert missing repos with their multipliers
 INSERT INTO target_repos (owner, repo, multiplier) VALUES 
-    ('CortexLM', 'cortex', 4.0),
-    ('CortexLM', 'vgrep', 1.0)
+    ('CortexLM', 'cortex', 1.0),
+    ('CortexLM', 'vgrep', 0.25)
 ON CONFLICT (owner, repo) DO UPDATE SET multiplier = EXCLUDED.multiplier;
 
 -- ============================================================================

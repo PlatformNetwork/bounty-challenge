@@ -164,8 +164,8 @@ Analyze these projects to find bugs, security issues, and improvements:
 
 | Repository | Description | Points | URL |
 |------------|-------------|--------|-----|
-| **CortexLM/cortex** | Cortex CLI and core | **4.0x** | https://github.com/CortexLM/cortex |
-| **CortexLM/vgrep** | Visual grep tool | **1.0x** | https://github.com/CortexLM/vgrep |
+| **CortexLM/cortex** | Cortex CLI and core | **1.0x** | https://github.com/CortexLM/cortex |
+| **CortexLM/vgrep** | Visual grep tool | **0.25x** | https://github.com/CortexLM/vgrep |
 
 > **Note:** Points multiplier affects your weight reward. A valid issue in cortex gives 4x more weight than vgrep!
 
