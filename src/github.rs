@@ -106,7 +106,8 @@ impl GitHubClient {
             );
 
             if let Some(since_date) = since {
-                url.push_str(&format!("&since={}", since_date.to_rfc3339()));
+                // Use Z format instead of +00:00 (GitHub API doesn't handle unescaped +)
+                url.push_str(&format!("&since={}", since_date.format("%Y-%m-%dT%H:%M:%SZ")));
             }
 
             debug!("Fetching issues page {}: {}", page, url);
@@ -146,25 +147,18 @@ impl GitHubClient {
         Ok(all_issues)
     }
 
-    /// Fetch all issues (open and closed) since a given date
-    /// Used for incremental sync - only fetches updated issues
-    pub async fn get_all_issues_since(
-        &self,
-        since: Option<DateTime<Utc>>,
-    ) -> Result<Vec<GitHubIssue>> {
+    /// Fetch all issues (open and closed)
+    /// Always fetches ALL issues to ensure nothing is missed
+    pub async fn get_all_issues(&self) -> Result<Vec<GitHubIssue>> {
         let mut all_issues = Vec::new();
         let mut page = 1;
         let per_page = 100;
 
         loop {
-            let mut url = format!(
+            let url = format!(
                 "{}/repos/{}/{}/issues?state=all&per_page={}&page={}&sort=updated&direction=desc",
                 GITHUB_API_BASE, self.owner, self.repo, per_page, page
             );
-
-            if let Some(since_date) = since {
-                url.push_str(&format!("&since={}", since_date.to_rfc3339()));
-            }
 
             debug!("Fetching all issues page {}: {}", page, url);
 

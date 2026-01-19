@@ -615,13 +615,10 @@ async fn trigger_sync_handler(State(state): State<Arc<AppState>>) -> Json<serde_
 pub async fn sync_repo(storage: &PgStorage, owner: &str, repo: &str) -> anyhow::Result<i32> {
     let github = crate::github::GitHubClient::new(owner, repo);
     
-    // Get last sync time
-    let since = storage.get_last_sync(owner, repo).await?;
+    info!("Syncing all issues from {}/{}", owner, repo);
     
-    info!("Syncing {}/{} since {:?}", owner, repo, since);
-    
-    // Fetch issues from GitHub
-    let issues = github.get_all_issues_since(since).await?;
+    // Fetch ALL issues from GitHub
+    let issues = github.get_all_issues().await?;
     let count = issues.len() as i32;
     
     // Upsert each issue
