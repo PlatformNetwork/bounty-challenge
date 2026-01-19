@@ -25,11 +25,15 @@
 # Component labels
 - name: cortex
   color: 5319e7
-  description: Related to Cortex integration
+  description: Related to Cortex integration (5 points)
+
+- name: term-challenge
+  color: 5319e7
+  description: Related to Term Challenge (1 point)
 
 - name: vgrep
   color: 5319e7
-  description: Related to vgrep/validation
+  description: Related to vgrep/validation (1 point)
 
 - name: api
   color: 1d76db

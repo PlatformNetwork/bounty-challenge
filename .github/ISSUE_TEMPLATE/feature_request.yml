@@ -16,6 +16,7 @@ body:
       description: Which project would this feature affect?
       options:
         - cortex
+        - term-challenge
         - vgrep
     validations:
       required: true
