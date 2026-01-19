@@ -250,7 +250,7 @@ fn parse_miner_key(key: &str) -> Result<(sr25519::Pair, String)> {
 
 /// Encode bytes to SS58 format with Bittensor prefix
 fn encode_ss58(public_key: &[u8; 32]) -> String {
-    use sha2::{Digest, Sha512};
+    use blake2::{Blake2b512, Digest};
 
     let prefix = SS58_PREFIX;
     
@@ -264,8 +264,8 @@ fn encode_ss58(public_key: &[u8; 32]) -> String {
     }
     payload.extend_from_slice(public_key);
 
-    // Calculate checksum
-    let mut hasher = Sha512::new();
+    // Calculate checksum using Blake2b-512 (Substrate standard)
+    let mut hasher = Blake2b512::new();
     hasher.update(b"SS58PRE");
     hasher.update(&payload);
     let hash = hasher.finalize();

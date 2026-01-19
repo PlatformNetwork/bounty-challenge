@@ -712,6 +712,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "axum",
+ "blake2",
  "bs58",
  "chrono",
  "clap",

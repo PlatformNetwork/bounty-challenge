@@ -262,6 +262,34 @@ async fn register_handler(
         });
     }
 
+    // Check if GitHub username is already registered with a DIFFERENT hotkey
+    if let Ok(Some(existing_hotkey)) = state.storage.get_hotkey_by_github(&request.github_username).await {
+        if existing_hotkey != request.hotkey {
+            return Json(RegisterResponse {
+                success: false,
+                message: None,
+                error: Some(format!(
+                    "GitHub username @{} is already registered with a different hotkey. Each username can only be linked to one hotkey.",
+                    request.github_username
+                )),
+            });
+        }
+    }
+
+    // Check if hotkey is already registered with a DIFFERENT username
+    if let Ok(Some(existing_username)) = state.storage.get_github_by_hotkey(&request.hotkey).await {
+        if existing_username.to_lowercase() != request.github_username.to_lowercase() {
+            return Json(RegisterResponse {
+                success: false,
+                message: None,
+                error: Some(format!(
+                    "This hotkey is already registered with @{}. Each hotkey can only be linked to one GitHub account.",
+                    existing_username
+                )),
+            });
+        }
+    }
+
     // Register in storage (async)
     match state
         .storage
