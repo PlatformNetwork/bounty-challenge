@@ -31,15 +31,11 @@ async fn health() -> Json<serde_json::Value> {
 }
 
 async fn get_weights() -> Json<serde_json::Value> {
-    // In validator mode without DB, return empty weights
+    // In validator mode without DB, return empty weights in term-challenge format
     // Platform will use existing chain weights
     Json(json!({
-        "weights": [],
         "epoch": 0,
-        "challenge_id": "bounty-challenge",
-        "total_miners": 0,
-        "mode": "validator",
-        "message": "Validator mode - no database connection. Use chain weights."
+        "weights": []
     }))
 }
 

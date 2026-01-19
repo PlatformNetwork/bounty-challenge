@@ -132,17 +132,15 @@ pub struct GetWeightsQuery {
 }
 
 #[derive(Debug, Serialize)]
-pub struct MinerWeight {
-    pub miner_hotkey: String,
+pub struct WeightEntry {
+    pub hotkey: String,
     pub weight: f64,
 }
 
 #[derive(Debug, Serialize)]
 pub struct GetWeightsResponse {
-    pub weights: Vec<MinerWeight>,
     pub epoch: u64,
-    pub challenge_id: String,
-    pub total_miners: usize,
+    pub weights: Vec<WeightEntry>,
 }
 
 // Weight calculation moved to pg_storage::calculate_weight_from_points()
@@ -169,19 +167,17 @@ async fn get_weights_handler(
         Err(e) => {
             error!("Failed to get weights: {}", e);
             return Json(GetWeightsResponse {
-                weights: vec![],
                 epoch,
-                challenge_id: "bounty-challenge".to_string(),
-                total_miners: 0,
+                weights: vec![],
             });
         }
     };
 
-    // Convert to MinerWeight
-    let mut weights: Vec<MinerWeight> = current_weights
+    // Convert to WeightEntry (term-challenge compatible format)
+    let mut weights: Vec<WeightEntry> = current_weights
         .iter()
-        .map(|w| MinerWeight {
-            miner_hotkey: w.hotkey.clone(),
+        .map(|w| WeightEntry {
+            hotkey: w.hotkey.clone(),
             weight: w.weight,
         })
         .collect();
@@ -197,18 +193,14 @@ async fn get_weights_handler(
     // Sort by weight descending
     weights.sort_by(|a, b| b.weight.partial_cmp(&a.weight).unwrap());
 
-    let total_miners = weights.len();
-
     info!(
         "Returning weights for {} miners at epoch {}",
-        total_miners, epoch
+        weights.len(), epoch
     );
 
     Json(GetWeightsResponse {
-        weights,
         epoch,
-        challenge_id: "bounty-challenge".to_string(),
-        total_miners,
+        weights,
     })
 }
 
