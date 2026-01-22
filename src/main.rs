@@ -158,11 +158,17 @@ async fn sync_all_repos(storage: &PgStorage) -> anyhow::Result<()> {
         }
     }
     
-    if total_synced > 0 || total_valid > 0 || total_invalid > 0 {
-        info!(
-            "GitHub sync complete: {} issues synced, {} became valid, {} became invalid",
-            total_synced, total_valid, total_invalid
-        );
+    // Always show totals after sync
+    match storage.get_issues_stats().await {
+        Ok(stats) => {
+            info!(
+                "GitHub sync complete: {} total issues (valid: {}, invalid: {}, pending: {}, open: {})",
+                stats.total, stats.valid, stats.invalid, stats.pending, stats.open
+            );
+        }
+        Err(e) => {
+            warn!("Could not get stats: {}", e);
+        }
     }
     
     Ok(())
