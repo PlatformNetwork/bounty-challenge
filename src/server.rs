@@ -190,8 +190,15 @@ async fn get_weights_handler(
     // DO NOT normalize - weights represent actual earned percentage
     // Total may be < 1.0 if not enough global activity (remainder = burn)
 
-    // Sort by weight descending
-    weights.sort_by(|a, b| b.weight.partial_cmp(&a.weight).unwrap());
+    // Sort by weight descending, placing NaN values at the end
+    weights.sort_by(|a, b| {
+        match (a.weight.is_nan(), b.weight.is_nan()) {
+            (true, true) => std::cmp::Ordering::Equal,
+            (true, false) => std::cmp::Ordering::Greater,  // NaN goes to the end (after higher weights)
+            (false, true) => std::cmp::Ordering::Less,     // Non-NaN comes before NaN
+            (false, false) => b.weight.partial_cmp(&a.weight).unwrap_or(std::cmp::Ordering::Equal),
+        }
+    });
 
     info!(
         "Returning weights for {} miners at epoch {}",
