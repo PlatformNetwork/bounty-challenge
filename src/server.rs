@@ -446,16 +446,20 @@ pub struct StatsResponse {
 }
 
 async fn stats_handler(State(state): State<Arc<AppState>>) -> Json<StatsResponse> {
-    // Get stats from PostgreSQL
+    // Get stats from PostgreSQL - ALL STATS ARE 24H ONLY
     let stats = state.storage.get_stats_24h().await.ok();
     let current_weights = state.storage.get_current_weights().await.unwrap_or_default();
-    let (penalized, _total) = state.storage.get_penalty_stats().await.unwrap_or((0, 0));
+    
+    // Count miners with activity in last 24h (weight > 0)
+    let active_miners = current_weights.iter().filter(|w| w.weight > 0.0).count();
+    // Count penalized miners (from current_weights which is 24h based)
+    let penalized_count = current_weights.iter().filter(|w| w.is_penalized).count();
 
     Json(StatsResponse {
         total_bounties: stats.map(|s| s.total_issues_resolved as u32).unwrap_or(0),
-        total_miners: current_weights.len(),
-        total_invalid: current_weights.iter().filter(|w| w.is_penalized).count() as u32,
-        penalized_miners: penalized as u32,
+        total_miners: active_miners, // Only count miners active in 24h
+        total_invalid: penalized_count as u32,
+        penalized_miners: penalized_count as u32,
         challenge_id: "bounty-challenge".to_string(),
         version: env!("CARGO_PKG_VERSION").to_string(),
     })
@@ -477,7 +481,7 @@ async fn issues_handler(
     State(state): State<Arc<AppState>>,
     Query(query): Query<IssuesQuery>,
 ) -> Json<serde_json::Value> {
-    let limit = query.limit.unwrap_or(50).min(200);
+    let limit = query.limit.unwrap_or(100).min(1000); // Allow viewing up to 1000 issues
     let offset = query.offset.unwrap_or(0);
 
     match state.storage.get_issues(
@@ -503,7 +507,7 @@ async fn pending_issues_handler(
     State(state): State<Arc<AppState>>,
     Query(query): Query<IssuesQuery>,
 ) -> Json<serde_json::Value> {
-    let limit = query.limit.unwrap_or(50).min(200);
+    let limit = query.limit.unwrap_or(100).min(1000); // Allow viewing up to 1000 issues
     let offset = query.offset.unwrap_or(0);
 
     match state.storage.get_pending_issues(limit, offset).await {

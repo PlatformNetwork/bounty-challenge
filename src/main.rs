@@ -9,7 +9,7 @@ use bounty_challenge::{BountyChallenge, GitHubClient, PgStorage};
 use tracing::{error, info, warn};
 use tracing_subscriber::EnvFilter;
 
-const SYNC_INTERVAL_SECS: u64 = 60; // 1 minute - fast sync for up-to-date data
+const SYNC_INTERVAL_SECS: u64 = 300; // 5 minutes
 const STAR_SYNC_INTERVAL_SECS: u64 = 300; // 5 minutes
 const HEARTBEAT_INTERVAL_SECS: u64 = 60; // 1 minute - check GitHub API health
 

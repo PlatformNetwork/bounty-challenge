@@ -739,9 +739,10 @@ impl PgStorage {
         let client = self.pool.get().await?;
 
         // Get all users with valid issues, pending issues, invalid issues, points, stars and weights
+        // ALL STATS ARE FOR LAST 24 HOURS ONLY
         let rows = client
             .query(
-                "WITH user_valid AS (
+                "WITH user_valid_24h AS (
                     SELECT 
                         r.hotkey,
                         COUNT(*) as valid_count,
@@ -749,27 +750,20 @@ impl PgStorage {
                         MAX(ri.resolved_at) as last_valid
                     FROM github_registrations r
                     JOIN resolved_issues ri ON r.hotkey = ri.hotkey
-                    GROUP BY r.hotkey
-                ),
-                user_valid_24h AS (
-                    SELECT 
-                        r.hotkey,
-                        COUNT(*) as valid_count_24h
-                    FROM github_registrations r
-                    JOIN resolved_issues ri ON r.hotkey = ri.hotkey
                     WHERE ri.resolved_at >= NOW() - INTERVAL '24 hours'
                     GROUP BY r.hotkey
                 ),
-                user_invalid AS (
+                user_invalid_24h AS (
                     SELECT 
                         r.hotkey,
                         COUNT(*) as invalid_count,
                         COUNT(*)::INTEGER as penalty_points
                     FROM github_registrations r
                     JOIN invalid_issues ii ON r.hotkey = ii.hotkey
+                    WHERE ii.recorded_at >= NOW() - INTERVAL '24 hours'
                     GROUP BY r.hotkey
                 ),
-                user_pending AS (
+                user_pending_24h AS (
                     SELECT 
                         LOWER(github_username) as username,
                         COUNT(*) as pending_count,
@@ -778,6 +772,7 @@ impl PgStorage {
                     WHERE state = 'open'
                       AND NOT 'valid' = ANY(labels)
                       AND NOT 'invalid' = ANY(labels)
+                      AND created_at >= NOW() - INTERVAL '24 hours'
                     GROUP BY LOWER(github_username)
                 ),
                 user_stars AS (
@@ -804,17 +799,16 @@ impl PgStorage {
                     COALESCE(us.star_count, 0)::INTEGER as star_count,
                     COALESCE(us.starred_repos, ARRAY[]::TEXT[]) as starred_repos,
                     CASE 
-                        WHEN COALESCE(uv24.valid_count_24h, 0) >= 2 THEN COALESCE(us.star_count, 0)
+                        WHEN COALESCE(uv.valid_count, 0) >= 2 THEN COALESCE(us.star_count, 0)
                         ELSE 0
                     END::INTEGER as star_bonus,
                     COALESCE(uw.weight, 0.0)::FLOAT8 as score,
                     COALESCE(uw.is_penalized, false) as is_penalized,
                     GREATEST(uv.last_valid, up.last_pending) as last_activity
                 FROM github_registrations r
-                LEFT JOIN user_valid uv ON r.hotkey = uv.hotkey
-                LEFT JOIN user_valid_24h uv24 ON r.hotkey = uv24.hotkey
-                LEFT JOIN user_invalid ui ON r.hotkey = ui.hotkey
-                LEFT JOIN user_pending up ON LOWER(r.github_username) = up.username
+                LEFT JOIN user_valid_24h uv ON r.hotkey = uv.hotkey
+                LEFT JOIN user_invalid_24h ui ON r.hotkey = ui.hotkey
+                LEFT JOIN user_pending_24h up ON LOWER(r.github_username) = up.username
                 LEFT JOIN user_stars us ON LOWER(r.github_username) = us.username
                 LEFT JOIN user_weights uw ON LOWER(r.github_username) = LOWER(uw.github_username)
                 WHERE COALESCE(uv.valid_count, 0) > 0 OR COALESCE(up.pending_count, 0) > 0 OR COALESCE(ui.invalid_count, 0) > 0
