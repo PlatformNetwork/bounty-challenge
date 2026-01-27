@@ -430,10 +430,7 @@ impl PgStorage {
 
     /// Record a resolved issue
     /// 
-    /// Points are based on multiplier:
-    /// - cortex: 5 points
-    /// - term-challenge: 1 point
-    /// - vgrep: 1 point
+    /// Points: 1 point per resolved issue (flat rate)
     pub async fn record_resolved_issue(
         &self,
         issue_id: i64,
@@ -449,8 +446,8 @@ impl PgStorage {
         // Get hotkey if registered
         let hotkey = self.get_hotkey_by_github(github_username).await?;
 
-        // Get repo multiplier (points per issue: cortex=5, vgrep=1, term-challenge=1)
-        let multiplier = self.get_repo_multiplier(repo_owner, repo_name).await?;
+        // All issues are worth 1 point (flat rate)
+        let multiplier = 1.0;
 
         let result = client
             .execute(
@@ -559,28 +556,35 @@ impl PgStorage {
             .collect())
     }
 
-    /// Calculate weight for a specific user based on points (multiplier * issues)
+    /// Calculate weight for a specific user based on points
     /// 
     /// Points system:
-    /// - cortex: 5 points per issue
-    /// - term-challenge: 1 point per issue  
-    /// - vgrep: 1 point per issue
+    /// - 1 point per resolved issue (flat rate)
+    /// - 0.25 points per starred repo
     /// - 100 points = 100% weight
     pub async fn calculate_user_weight(&self, hotkey: &str) -> Result<f64> {
         let client = self.pool.get().await?;
 
-        // Get user's total points (SUM of multipliers) in last 24h
-        let user_row = client
+        // Get user's total points (1 point per issue) in last 24h
+        let issues_row = client
             .query_one(
-                "SELECT COALESCE(SUM(multiplier)::FLOAT8, 0) FROM resolved_issues 
+                "SELECT COUNT(*)::FLOAT8 FROM resolved_issues 
                  WHERE hotkey = $1 AND resolved_at >= NOW() - INTERVAL '24 hours'",
                 &[&hotkey],
             )
             .await?;
-        let user_points: f64 = user_row.get::<_, f64>(0);
+        let issue_points: f64 = issues_row.get::<_, f64>(0);
+
+        // Get user's star bonus (0.25 points per starred repo)
+        let github_username = self.get_github_by_hotkey(hotkey).await?.unwrap_or_default();
+        let star_count = self.get_user_star_count(&github_username).await.unwrap_or(0);
+        let star_points: f64 = star_count as f64 * 0.25;
+
+        // Total points = issues + stars
+        let total_points = issue_points + star_points;
 
         // Calculate weight: points * 0.01, capped at 1.0 (100%)
-        let weight = (user_points * WEIGHT_PER_POINT).min(1.0);
+        let weight = (total_points * WEIGHT_PER_POINT).min(1.0);
         Ok(weight)
     }
 
@@ -746,7 +750,7 @@ impl PgStorage {
                     SELECT 
                         r.hotkey,
                         COUNT(*) as valid_count,
-                        SUM(ri.multiplier)::INTEGER as total_points,
+                        COUNT(*)::INTEGER as total_points,  -- 1 point per issue (flat rate)
                         MAX(ri.resolved_at) as last_valid
                     FROM github_registrations r
                     JOIN resolved_issues ri ON r.hotkey = ri.hotkey
@@ -1284,19 +1288,13 @@ impl PgStorage {
                 warn!("Issue #{} in {}/{} LOST valid label - removed from resolved_issues", issue.number, repo_owner, repo_name);
             }
             LabelChange::BecameValid => {
-                // Get multiplier from project tag (cortex, vgrep, etc.)
-                let multiplier = self.get_tag_multiplier(&new_labels).await.unwrap_or(1.0);
+                // All issues are worth 1 point (flat rate)
+                let multiplier = 1.0_f32;
                 
-                // Find the project tag for logging
-                let project_tag = new_labels.iter()
-                    .find(|l| ["cortex", "vgrep", "term-challenge", "bounty-challenge"].contains(&l.to_lowercase().as_str()))
-                    .map(|s| s.as_str())
-                    .unwrap_or("unknown");
+                info!("Issue #{} in {}/{} marked as VALID - auto-crediting 1 point to user @{}", 
+                      issue.number, repo_owner, repo_name, issue.user.login);
                 
-                info!("Issue #{} in {}/{} marked as VALID - auto-crediting to user @{} (tag={}, {}x)", 
-                      issue.number, repo_owner, repo_name, issue.user.login, project_tag, multiplier);
-                
-                // Auto-credit: add to resolved_issues with tag-based multiplier
+                // Auto-credit: add to resolved_issues with 1 point
                 let hotkey = self.get_hotkey_by_github(&issue.user.login).await.ok().flatten();
                 let resolved_at = issue.closed_at.unwrap_or(issue.updated_at);
                 
@@ -1314,7 +1312,7 @@ impl PgStorage {
                             &issue.html_url,
                             &issue.title,
                             &resolved_at,
-                            &(multiplier as f32),
+                            &multiplier,
                         ],
                     )
                     .await?;
@@ -1880,9 +1878,8 @@ pub struct StarStats {
 /// Calculate weight based on points
 /// 
 /// Points system:
-/// - cortex: 5 points per issue
-/// - term-challenge: 1 point per issue
-/// - vgrep: 1 point per issue
+/// - 1 point per resolved issue (flat rate)
+/// - 0.25 points per starred repo
 /// - 100 points = 100% weight (capped)
 /// 
 /// Formula: weight = min(points * 0.01, 1.0)
@@ -1932,25 +1929,25 @@ mod tests {
     }
 
     #[test]
-    fn test_weight_from_points_cortex() {
-        // 7 cortex issues = 7 * 5 = 35 points = 35%
-        let cortex_points = 7.0 * 5.0;
-        assert!((calculate_weight_from_points(cortex_points) - 0.35).abs() < 0.0001);
+    fn test_weight_from_points_issues() {
+        // 7 issues = 7 points = 7%
+        let issue_points = 7.0;
+        assert!((calculate_weight_from_points(issue_points) - 0.07).abs() < 0.0001);
         
-        // 20 cortex issues = 20 * 5 = 100 points = 100%
-        let cortex_points = 20.0 * 5.0;
-        assert!((calculate_weight_from_points(cortex_points) - 1.0).abs() < 0.0001);
+        // 100 issues = 100 points = 100%
+        let issue_points = 100.0;
+        assert!((calculate_weight_from_points(issue_points) - 1.0).abs() < 0.0001);
     }
 
     #[test]
-    fn test_weight_from_points_vgrep() {
-        // 7 vgrep issues = 7 * 1 = 7 points = 7%
-        let vgrep_points = 7.0 * 1.0;
-        assert!((calculate_weight_from_points(vgrep_points) - 0.07).abs() < 0.0001);
+    fn test_weight_from_points_with_stars() {
+        // 10 issues (10 pts) + 4 stars (1 pt) = 11 points = 11%
+        let total_points = 10.0 + (4.0 * 0.25);
+        assert!((calculate_weight_from_points(total_points) - 0.11).abs() < 0.0001);
         
-        // 100 vgrep issues = 100 * 1 = 100 points = 100%
-        let vgrep_points = 100.0 * 1.0;
-        assert!((calculate_weight_from_points(vgrep_points) - 1.0).abs() < 0.0001);
+        // 96 issues + 16 stars = 96 + 4 = 100 points = 100%
+        let total_points = 96.0 + (16.0 * 0.25);
+        assert!((calculate_weight_from_points(total_points) - 1.0).abs() < 0.0001);
     }
 
     #[test]

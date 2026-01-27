@@ -144,7 +144,7 @@ pub struct GetWeightsResponse {
 }
 
 // Weight calculation moved to pg_storage::calculate_weight_from_points()
-// Uses point system: cortex=5pts, term-challenge=1pt, vgrep=1pt
+// Uses point system: 1 point per issue + 0.25 points per starred repo
 // 100 points = 100% weight
 
 async fn get_weights_handler(
@@ -175,7 +175,7 @@ async fn get_weights_handler(
 
     // Convert to WeightEntry - NO NORMALIZATION
     // Each user's weight = their points * 0.01, capped at 1.0 per user
-    // Points come from resolved issues with multipliers (cortex=5, vgrep=1, etc.)
+    // Points: 1 per issue + 0.25 per starred repo
     // 100 total points globally = weights can sum to 1.0
     // If total < 1.0, remainder goes to burn (handled by validator)
     let mut weights: Vec<WeightEntry> = current_weights
