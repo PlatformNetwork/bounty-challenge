@@ -135,48 +135,106 @@ pub async fn run_register_wizard(platform_url: &str) -> Result<()> {
     };
 
     let result = client.register(&request).await;
-    pb.finish_and_clear();
 
     match result {
         Ok(response) => {
             if response.success {
-                println!();
-                println!("  {}", style("═".repeat(50)).dim());
-                println!();
-                println!(
-                    "  {} Registration successful!",
-                    style("✓").green().bold()
-                );
-                println!();
-                println!(
-                    "  Your GitHub account {} is now linked.",
-                    style(format!("@{}", github_username)).cyan()
-                );
-                println!();
-                println!("  {}", style("Next steps:").bold());
-                println!(
-                    "    1. Create issues on {}",
-                    style("https://github.com/PlatformNetwork/bounty-challenge").cyan()
-                );
-                println!(
-                    "    2. Wait for maintainers to add the '{}' label",
-                    style("valid").green()
-                );
-                println!("    3. Rewards are credited automatically!");
-                println!();
-                println!("  Check your status:");
-                println!(
-                    "    {}",
-                    style(format!("bounty status --hotkey {}", &hotkey[..16])).yellow()
-                );
-                println!();
+                // Verify the registration was actually persisted by checking status API
+                pb.set_message("Verifying registration...");
+                
+                // Small delay to allow database write to complete
+                tokio::time::sleep(Duration::from_millis(500)).await;
+                
+                let status_result = client.get_status(&hotkey).await;
+                pb.finish_and_clear();
+                
+                match status_result {
+                    Ok(status) if status.registered => {
+                        // Registration confirmed via status API
+                        println!();
+                        println!("  {}", style("═".repeat(50)).dim());
+                        println!();
+                        println!(
+                            "  {} Registration successful!",
+                            style("✓").green().bold()
+                        );
+                        println!();
+                        println!(
+                            "  Your GitHub account {} is now linked.",
+                            style(format!("@{}", github_username)).cyan()
+                        );
+                        println!();
+                        println!("  {}", style("Next steps:").bold());
+                        println!(
+                            "    1. Create issues on {}",
+                            style("https://github.com/PlatformNetwork/bounty-challenge").cyan()
+                        );
+                        println!(
+                            "    2. Wait for maintainers to add the '{}' label",
+                            style("valid").green()
+                        );
+                        println!("    3. Rewards are credited automatically!");
+                        println!();
+                        println!("  Check your status:");
+                        println!(
+                            "    {}",
+                            style(format!("bounty status --hotkey {}", &hotkey[..16])).yellow()
+                        );
+                        println!();
+                    }
+                    Ok(status) => {
+                        // Server returned success but user is not actually registered
+                        println!();
+                        println!(
+                            "  {} Registration may have failed",
+                            style("!").yellow().bold()
+                        );
+                        println!();
+                        println!(
+                            "  The server acknowledged the request, but verification shows"
+                        );
+                        println!(
+                            "  your account is not registered (registered: {}).",
+                            status.registered
+                        );
+                        println!();
+                        println!("  Please try again or contact support if the issue persists.");
+                        println!();
+                    }
+                    Err(e) => {
+                        // Could not verify, but registration response was successful
+                        // Show warning but don't claim full success
+                        println!();
+                        println!(
+                            "  {} Registration submitted but could not verify",
+                            style("!").yellow().bold()
+                        );
+                        println!();
+                        println!(
+                            "  The server accepted your registration request, but we could"
+                        );
+                        println!(
+                            "  not confirm it was saved. Verification error: {}",
+                            e
+                        );
+                        println!();
+                        println!("  Please check your status with:");
+                        println!(
+                            "    {}",
+                            style(format!("bounty status --hotkey {}", &hotkey[..16])).yellow()
+                        );
+                        println!();
+                    }
+                }
             } else {
+                pb.finish_and_clear();
                 let error = response.error.unwrap_or_else(|| "Unknown error".to_string());
                 println!();
                 println!("  {} Registration failed: {}", style("✗").red(), error);
             }
         }
         Err(e) => {
+            pb.finish_and_clear();
             println!();
             println!("  {} Error: {}", style("✗").red(), e);
             println!();
