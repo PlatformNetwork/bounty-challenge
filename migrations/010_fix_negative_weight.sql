@@ -23,7 +23,7 @@ recent_invalid AS (
     SELECT 
         i.github_username,
         i.hotkey,
-        COUNT(*) as invalid_count  -- 1 penalty per invalid issue
+        COUNT(*) * 2 as invalid_count  -- 2 penalty per invalid issue
     FROM invalid_issues i
     WHERE i.recorded_at >= NOW() - INTERVAL '24 hours'
       AND i.hotkey IS NOT NULL

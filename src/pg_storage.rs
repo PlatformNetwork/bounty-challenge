@@ -576,10 +576,10 @@ impl PgStorage {
             .await?;
         let valid_points: f64 = valid_row.get::<_, f64>(0);
 
-        // Get user's invalid points (1 penalty per invalid issue) in last 24h
+        // Get user's invalid points (2 penalty per invalid issue) in last 24h
         let invalid_row = client
             .query_one(
-                "SELECT COUNT(*)::FLOAT8 FROM invalid_issues 
+                "SELECT COUNT(*)::FLOAT8 * 2.0 FROM invalid_issues 
                  WHERE hotkey = $1 AND recorded_at >= NOW() - INTERVAL '24 hours'",
                 &[&hotkey],
             )
