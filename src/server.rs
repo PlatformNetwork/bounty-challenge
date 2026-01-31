@@ -77,7 +77,10 @@ async fn health_handler(State(state): State<Arc<AppState>>) -> Json<HealthRespon
 }
 
 async fn config_handler(State(state): State<Arc<AppState>>) -> Json<serde_json::Value> {
-    Json(serde_json::to_value(state.challenge.config()).unwrap())
+    Json(
+        serde_json::to_value(state.challenge.config())
+            .expect("failed to serialize challenge config"),
+    )
 }
 
 async fn evaluate_handler(
@@ -156,7 +159,7 @@ async fn get_weights_handler(
         // Estimate epoch from current time (12 second blocks on Bittensor)
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .expect("system time should be after Unix epoch")
             .as_secs();
         now / 12
     });
@@ -191,7 +194,7 @@ async fn get_weights_handler(
     // Total may be < 1.0 if not enough global activity (remainder = burn)
 
     // Sort by weight descending
-    weights.sort_by(|a, b| b.weight.partial_cmp(&a.weight).unwrap());
+    weights.sort_by(|a, b| b.weight.partial_cmp(&a.weight).unwrap_or(std::cmp::Ordering::Equal));
 
     info!(
         "Returning weights for {} miners at epoch {}",
@@ -526,7 +529,9 @@ async fn pending_issues_handler(
 
 async fn issues_stats_handler(State(state): State<Arc<AppState>>) -> Json<serde_json::Value> {
     match state.storage.get_issues_stats().await {
-        Ok(stats) => Json(serde_json::to_value(stats).unwrap()),
+        Ok(stats) => Json(
+            serde_json::to_value(stats).expect("failed to serialize issues stats"),
+        ),
         Err(e) => {
             error!("Failed to get issues stats: {}", e);
             Json(serde_json::json!({ "error": e.to_string() }))
@@ -539,7 +544,9 @@ async fn hotkey_details_handler(
     Path(hotkey): Path<String>,
 ) -> Json<serde_json::Value> {
     match state.storage.get_hotkey_details(&hotkey).await {
-        Ok(Some(details)) => Json(serde_json::to_value(details).unwrap()),
+        Ok(Some(details)) => Json(
+            serde_json::to_value(details).expect("failed to serialize hotkey details"),
+        ),
         Ok(None) => Json(serde_json::json!({ "error": "Hotkey not found" })),
         Err(e) => {
             error!("Failed to get hotkey details: {}", e);
@@ -553,7 +560,9 @@ async fn github_user_handler(
     Path(username): Path<String>,
 ) -> Json<serde_json::Value> {
     match state.storage.get_github_user_details(&username).await {
-        Ok(Some(details)) => Json(serde_json::to_value(details).unwrap()),
+        Ok(Some(details)) => Json(
+            serde_json::to_value(details).expect("failed to serialize GitHub user details"),
+        ),
         Ok(None) => Json(serde_json::json!({ "error": "GitHub user not found" })),
         Err(e) => {
             error!("Failed to get GitHub user details: {}", e);
