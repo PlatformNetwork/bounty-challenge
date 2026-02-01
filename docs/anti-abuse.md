@@ -73,17 +73,17 @@ First valid claim wins. Subsequent attempts are rejected with:
 {"reason": "Issue already claimed"}
 ```
 
-### 5. Logarithmic Scoring
+### 5. Linear Points System
 
-Diminishing returns make mass submission uneconomical:
+Each valid issue earns exactly 1 point with a clear cap:
 
-| Issues | Score | Efficiency |
-|--------|-------|------------|
-| 1 | 0.100 | 100% |
-| 10 | 0.346 | 34.6% per issue |
-| 100 | 0.666 | 6.66% per issue |
+| Issues | Points | Weight |
+|--------|--------|--------|
+| 1 | 1 | 2% |
+| 10 | 10 | 20% |
+| 50 | 50 | 100% (capped) |
 
-Filing 100 low-quality issues (even if approved) yields only ~6.7x the reward of 1 high-quality issue.
+The 50-point cap and maintainer gatekeeping ensure mass submission is uneconomical.
 
 ### 6. Registration Requirement
 

@@ -1,293 +1,226 @@
 # Scoring & Rewards
 
-Complete specification of the adaptive reward system for Bounty Challenge.
+Complete specification of the reward system for Bounty Challenge.
 
 ## Table of Contents
 
 1. [Overview](#overview)
-2. [Emission Rate](#emission-rate)
-3. [Adaptive Weight Calculation](#adaptive-weight-calculation)
-4. [User Weight](#user-weight)
-5. [Bittensor Integration](#bittensor-integration)
-6. [Examples](#examples)
-7. [Configuration](#configuration)
+2. [Points System](#points-system)
+3. [Weight Calculation](#weight-calculation)
+4. [Star Bonus](#star-bonus)
+5. [Penalty System](#penalty-system)
+6. [Bittensor Integration](#bittensor-integration)
+7. [Examples](#examples)
 
 ---
 
 ## Overview
 
-Bounty Challenge uses an **adaptive reward system** designed to:
-1. **Incentivize participation** - More issues = more total emissions
-2. **Prevent gaming** - Adaptive weights prevent spam attacks
-3. **Ensure fairness** - Rewards scale with contribution
-4. **Encourage quality** - Only validated issues count
+Bounty Challenge uses a **points-based reward system** designed to:
+1. **Incentivize quality** - Valid issues earn points
+2. **Reward engagement** - Starring repos adds bonus points
+3. **Prevent abuse** - Invalid issues deduct points
+4. **Ensure fairness** - Simple, transparent scoring
 
 ### Key Principles
 
 | Principle | Implementation |
 |-----------|---------------|
-| **Activity-Based Emission** | 250 issues/day = full emission |
-| **Adaptive Per-Issue Weight** | Weight decreases when activity > 100/day |
-| **Rolling Window** | Only last 24 hours count |
-| **Quality Gate** | Maintainers must add `valid` label |
+| **Point-Based** | 1 point per valid issue |
+| **Star Bonus** | 0.25 points per starred repo |
+| **Penalty System** | Invalid issues reduce balance |
+| **Quality Gate** | Only `valid` labeled issues count |
 
 ---
 
-## Emission Rate
+## Points System
 
-### Maximum Daily Emission
+### Earning Points
 
-The maximum available weight depends on total daily activity:
+| Source | Points | Description |
+|--------|--------|-------------|
+| **Valid Issue** | 1 point | Issue closed with `valid` label |
+| **Starred Repo** | 0.25 points | Each starred target repository |
 
-$$W_{max} = \min\left(\frac{N_{total}}{250}, 1.0\right)$$
+### Point Requirements
 
-Where:
-- $W_{max}$ = Maximum total weight available for distribution
-- $N_{total}$ = Total valid issues in the last 24 hours
-- 250 = Target issues per day for full emission
+| Points | Weight | Description |
+|--------|--------|-------------|
+| 0 | 0% | No valid contributions |
+| 25 | 50% | 25 valid issues |
+| 50 | 100% | Maximum weight reached |
+| 50+ | 100% | Capped at 100% |
 
-### Emission Curve
+### Points Formula
 
-```
-Weight
-  │
-1.0├────────────────────────────────●────────────────
-   │                          ●
-0.8├                    ●
-   │              ●
-0.6├        ●
-   │    ●
-0.4├  ●
-   │●
-0.2├
-   │
-  0└──────────────────────────────────────────────────
-    0   50  100  150  200  250  300  350  400  450  500
-                    Total Issues / 24h
-```
-
-### Emission Table
-
-| Total Issues | Max Weight | % of Full Emission |
-|--------------|------------|-------------------|
-| 25 | 0.10 | 10% |
-| 50 | 0.20 | 20% |
-| 100 | 0.40 | 40% |
-| 150 | 0.60 | 60% |
-| 200 | 0.80 | 80% |
-| 250 | 1.00 | 100% |
-| 500 | 1.00 | 100% (capped) |
+$$points = issues_{valid} + (stars \times 0.25)$$
 
 ---
 
-## Adaptive Weight Calculation
+## Weight Calculation
 
-### Per-Issue Weight Formula
+### Formula
 
-Weight per issue adapts based on total daily activity:
+Your weight is calculated directly from your total points:
 
-$$w_{issue} = \begin{cases} 
-0.01 & \text{if } N_{total} \leq 100 \\ 
-0.01 \times \frac{100}{N_{total}} & \text{if } N_{total} > 100
-\end{cases}$$
+$$W_{user} = \min(points \times 0.02, 1.0)$$
 
 Where:
-- $w_{issue}$ = Weight earned per valid issue
-- $N_{total}$ = Total valid issues in the last 24 hours
-- 100 = Adaptation threshold
-- 0.01 = Base weight per issue
+- $W_{user}$ = Your total weight (0.0 to 1.0)
+- $points$ = Total points (valid issues + star bonus)
+- 0.02 = Weight per point (2% per point)
+- 1.0 = Maximum weight cap (100%)
 
-### Why Adaptive?
+### Constants
 
-The adaptive formula prevents gaming:
+```rust
+// Maximum points for full weight (100%)
+MAX_POINTS_FOR_FULL_WEIGHT = 50.0
 
-| Attack | Prevention |
-|--------|------------|
-| **Mass spam** | Weight per issue decreases with volume |
-| **Sybil attack** | Total weight is capped at 1.0 |
-| **Low-quality flood** | Maintainers gate with `valid` label |
-
-### Weight per Issue Curve
-
-```
-Weight/Issue
-    │
-0.01├●●●●●●●●●●●●───────────────────────────────────
-    │               ●
-    │                   ●
-    │                       ●
-0.005├                          ●
-    │                              ●
-    │                                  ●
-    │                                      ●
-0.002├                                          ●
-    │
-   0└──────────────────────────────────────────────────
-     0   50  100  150  200  250  300  350  400  450  500
-                     Total Issues / 24h
+// Weight earned per point (2% = 0.02)
+WEIGHT_PER_POINT = 0.02
 ```
 
-### Weight per Issue Table
+### Weight Table
 
-| Total Issues | Weight per Issue | Reduction |
-|--------------|-----------------|-----------|
-| 50 | 0.0100 | - |
-| 100 | 0.0100 | - |
-| 150 | 0.0067 | -33% |
-| 200 | 0.0050 | -50% |
-| 300 | 0.0033 | -67% |
-| 500 | 0.0020 | -80% |
-| 1000 | 0.0010 | -90% |
+| Points | Weight | Calculation |
+|--------|--------|-------------|
+| 1 | 2% | 1 × 0.02 = 0.02 |
+| 5 | 10% | 5 × 0.02 = 0.10 |
+| 10 | 20% | 10 × 0.02 = 0.20 |
+| 25 | 50% | 25 × 0.02 = 0.50 |
+| 50 | 100% | 50 × 0.02 = 1.00 |
+| 100 | 100% | Capped at 1.0 |
 
 ---
 
-## User Weight
+## Star Bonus
 
-### Calculation
+### Eligible Repositories
 
-Your weight is your issues multiplied by the current per-issue weight, capped at the maximum:
+Earn 0.25 points by starring each of these repositories:
 
-$$W_{user} = \min(n_{user} \times w_{issue}, W_{max})$$
+| Repository | URL |
+|------------|-----|
+| CortexLM/vgrep | https://github.com/CortexLM/vgrep |
+| CortexLM/cortex | https://github.com/CortexLM/cortex |
+| PlatformNetwork/platform | https://github.com/PlatformNetwork/platform |
+| PlatformNetwork/term-challenge | https://github.com/PlatformNetwork/term-challenge |
+| PlatformNetwork/bounty-challenge | https://github.com/PlatformNetwork/bounty-challenge |
 
-Where:
-- $W_{user}$ = Your total weight
-- $n_{user}$ = Your valid issues in the last 24 hours
-- $w_{issue}$ = Current weight per issue
-- $W_{max}$ = Maximum available weight
+### Requirements
 
-### Example Calculations
+- **Minimum**: 2 valid issues resolved before star bonus applies
+- **Bonus**: 0.25 points per starred repo
+- **Maximum**: 1.25 points (5 repos × 0.25)
 
-**Low Activity Day (50 issues total)**
+### Examples
 
-```
-N_total = 50
-W_max = 50/250 = 0.20
-w_issue = 0.01 (below threshold)
+| Miner | Valid Issues | Stars | Issue Points | Star Points | Total | Weight |
+|-------|-------------|-------|--------------|-------------|-------|--------|
+| A | 10 | 0 | 10 | 0 | 10 | 20% |
+| B | 10 | 4 | 10 | 1.0 | 11 | 22% |
+| C | 45 | 5 | 45 | 1.25 | 46.25 | 92.5% |
+| D | 50 | 5 | 50 | 1.25 | 51.25 | 100% (capped) |
 
-If you have 5 issues:
-W_user = min(5 × 0.01, 0.20) = 0.05
+---
 
-If you have 30 issues:
-W_user = min(30 × 0.01, 0.20) = 0.20 (capped)
-```
+## Penalty System
 
-**High Activity Day (300 issues total)**
+### Invalid Issues
 
-```
-N_total = 300
-W_max = min(300/250, 1.0) = 1.0
-w_issue = 0.01 × (100/300) = 0.00333
+Issues marked with the `invalid` label incur penalties:
 
-If you have 10 issues:
-W_user = min(10 × 0.00333, 1.0) = 0.0333
+| Action | Effect |
+|--------|--------|
+| **Invalid Issue** | -0.5 penalty points |
 
-If you have 100 issues:
-W_user = min(100 × 0.00333, 1.0) = 0.333
-```
+### Balance Calculation
 
-### User Weight Reference Table
+$$balance = valid_{issues} - (invalid_{issues} \times 0.5)$$
 
-| Total/Day | Your Issues | Weight per Issue | Your Weight |
-|-----------|-------------|-----------------|-------------|
-| 50 | 5 | 0.0100 | 0.050 |
-| 50 | 10 | 0.0100 | 0.100 |
-| 100 | 5 | 0.0100 | 0.050 |
-| 100 | 10 | 0.0100 | 0.100 |
-| 200 | 5 | 0.0050 | 0.025 |
-| 200 | 10 | 0.0050 | 0.050 |
-| 500 | 10 | 0.0020 | 0.020 |
-| 500 | 50 | 0.0020 | 0.100 |
+If `balance < 0`, your weight becomes **0** (penalized).
+
+### Recovery
+
+To recover from penalty status:
+1. Submit new valid issues
+2. Accumulate positive balance
+3. Weight returns when balance ≥ 0
+
+### Examples
+
+| Miner | Valid | Invalid | Balance | Status |
+|-------|-------|---------|---------|--------|
+| A | 5 | 2 | 4 | ✅ OK |
+| B | 3 | 8 | -1 | ❌ Penalized |
+| C | 10 | 0 | 10 | ✅ OK |
 
 ---
 
 ## Bittensor Integration
 
-### Weight Normalization
+### Weight Submission
 
-For Bittensor submission, weights are normalized to sum to 1.0:
+Weights are submitted to Bittensor without normalization:
+- Each user's weight represents their actual earned percentage
+- Total weights may sum to less than 1.0
+- Remainder goes to burn (handled by validator)
 
-$$w_i^{norm} = \frac{W_i}{\sum_j W_j}$$
+### On-Chain Format
 
-### u16 Conversion
+Weights are converted to u16 for on-chain storage:
 
-Normalized weights are scaled to u16 for on-chain storage:
-
-$$W_i^{chain} = \lfloor w_i^{norm} \times 65535 \rfloor$$
-
-### Example
-
-Given three miners:
-
-| Miner | Issues | Raw Weight |
-|-------|--------|-----------|
-| A | 10 | 0.10 |
-| B | 5 | 0.05 |
-| C | 2 | 0.02 |
-
-Total weight: 0.17
-
-Normalized:
-- $w_A = 0.10 / 0.17 = 0.588$
-- $w_B = 0.05 / 0.17 = 0.294$
-- $w_C = 0.02 / 0.17 = 0.118$
-
-On-chain (u16):
-- $W_A = 38,545$
-- $W_B = 19,272$
-- $W_C = 7,718$
+$$W_{chain} = \lfloor W_{user} \times 65535 \rfloor$$
 
 ---
 
 ## Examples
 
-### Scenario 1: Quiet Day
+### Example 1: New Miner
 
 ```
-Global State:
-  Total issues in 24h: 30
-  Max weight available: 30/250 = 0.12
-  Weight per issue: 0.01
-
-Miner Performance:
-  Alice: 5 issues  → 5 × 0.01 = 0.05
-  Bob:   3 issues  → 3 × 0.01 = 0.03
-  Carol: 2 issues  → 2 × 0.01 = 0.02
-
-Total distributed: 0.10 (out of 0.12 max)
+Miner registers and submits 5 valid issues:
+  Points: 5 issues × 1 point = 5 points
+  Weight: 5 × 0.02 = 0.10 (10%)
 ```
 
-### Scenario 2: Active Day
+### Example 2: Active Miner with Stars
 
 ```
-Global State:
-  Total issues in 24h: 200
-  Max weight available: 200/250 = 0.80
-  Weight per issue: 0.01 × (100/200) = 0.005
-
-Miner Performance:
-  Alice: 20 issues → 20 × 0.005 = 0.10
-  Bob:   15 issues → 15 × 0.005 = 0.075
-  Carol: 10 issues → 10 × 0.005 = 0.05
-  ... 155 other issues ...
-
-Total distributed: ~0.80
+Miner has 20 valid issues and starred 4 repos:
+  Issue Points: 20 × 1 = 20
+  Star Points: 4 × 0.25 = 1.0
+  Total: 21 points
+  Weight: 21 × 0.02 = 0.42 (42%)
 ```
 
-### Scenario 3: Very Active Day
+### Example 3: Maximum Weight
 
 ```
-Global State:
-  Total issues in 24h: 500
-  Max weight available: 1.0 (capped)
-  Weight per issue: 0.01 × (100/500) = 0.002
+Miner has 48 valid issues and starred 5 repos:
+  Issue Points: 48 × 1 = 48
+  Star Points: 5 × 0.25 = 1.25
+  Total: 49.25 points
+  Weight: 49.25 × 0.02 = 0.985 (98.5%)
 
-Miner Performance:
-  Alice: 50 issues  → 50 × 0.002 = 0.10
-  Bob:   100 issues → 100 × 0.002 = 0.20
-  Carol: 25 issues  → 25 × 0.002 = 0.05
-  ... 325 other issues → 0.65
+If they get 2 more valid issues:
+  Total: 51.25 points
+  Weight: min(51.25 × 0.02, 1.0) = 1.0 (100% capped)
+```
 
-Total distributed: 1.0 (full emission)
+### Example 4: Penalized Miner
+
+```
+Miner has 3 valid issues but 8 invalid issues:
+  Valid Points: 3
+  Penalty Points: 8 × 0.5 = 4
+  Net Points: 3 - 4 = -1 (negative)
+  Weight: 0 (penalized)
+
+To recover, they need 3 more valid issues:
+  Net Points: 6 - 4 = 2 (positive)
+  Weight: 2 × 0.02 = 0.04 (4%)
 ```
 
 ---
@@ -298,11 +231,12 @@ Total distributed: 1.0 (full emission)
 
 | Parameter | Value | Description |
 |-----------|-------|-------------|
-| `max_issues_for_full_emission` | 250 | Issues/day for 100% emission |
-| `base_weight_per_issue` | 0.01 | Base weight per issue |
-| `adaptation_threshold` | 100 | Issues/day before adaptation |
+| `max_points_for_full_weight` | 50 | Points for 100% weight |
+| `weight_per_point` | 0.02 | Weight earned per point |
 | `valid_label` | "valid" | Required label for rewards |
-| `window_hours` | 24 | Rolling window for calculations |
+| `star_bonus_per_repo` | 0.25 | Points per starred repo |
+| `invalid_penalty` | 0.5 | Points deducted per invalid |
+| `min_valid_for_stars` | 2 | Min valid issues for star bonus |
 
 ### Configuration File
 
@@ -310,9 +244,8 @@ In `config.toml`:
 
 ```toml
 [rewards]
-max_issues_for_full_emission = 250
-base_weight_per_issue = 0.01
-adaptation_threshold = 100
+max_points_for_full_weight = 50
+weight_per_point = 0.02
 valid_label = "valid"
 ```
 
@@ -322,5 +255,12 @@ valid_label = "valid"
 
 ```mermaid
 flowchart LR
-    A["Issue"] --> B["Review"] --> C["Count"] --> D["Weights"] --> E["Submit"]
+    A["Valid Issue"] --> B["+1 Point"]
+    C["Star Repo"] --> D["+0.25 Points"]
+    E["Invalid Issue"] --> F["-0.5 Points"]
+    B --> G["Total Points"]
+    D --> G
+    F --> G
+    G --> H["Weight = Points × 0.02"]
+    H --> I["Capped at 100%"]
 ```

@@ -45,3 +45,13 @@ pub fn print_header(title: &str) {
     println!("{}", style_bold(title));
     println!("{}", "─".repeat(title.len()));
 }
+
+/// Safely truncate a hotkey for display, showing first 8 and last 4 characters.
+/// Returns the full string if it's shorter than 12 characters.
+pub fn truncate_hotkey(hotkey: &str) -> String {
+    if hotkey.len() >= 12 {
+        format!("{}...{}", &hotkey[..8], &hotkey[hotkey.len() - 4..])
+    } else {
+        hotkey.to_string()
+    }
+}

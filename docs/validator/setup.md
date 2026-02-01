@@ -28,7 +28,7 @@ cd bounty-challenge
 cargo build --release
 
 # Verify
-./target/release/bounty-server --version
+./target/release/bounty --version
 ```
 
 ### 2. Set Environment Variables
@@ -60,7 +60,7 @@ psql $DATABASE_URL < migrations/002_rewards_schema.sql
 Run the full server with auto-scanning:
 
 ```bash
-./target/release/bounty-server
+./target/release/bounty server
 ```
 
 Or with explicit options:
@@ -87,13 +87,10 @@ Run validator-only mode (no HTTP server):
 [github]
 client_id = "Ov23liAkfvnMhA6C68iy"
 
+# Target repository for bounties
 [[github.repos]]
-owner = "CortexLM"
-repo = "cortex"
-
-[[github.repos]]
-owner = "CortexLM"
-repo = "fabric"
+owner = "PlatformNetwork"
+repo = "bounty-challenge"
 
 [server]
 host = "0.0.0.0"
@@ -104,9 +101,9 @@ port = 8080
 # Set DATABASE_URL environment variable for PostgreSQL connection
 
 [rewards]
-max_issues_for_full_emission = 250
-base_weight_per_issue = 0.01
-adaptation_threshold = 100
+# 50 points = 100% weight (1 point per valid issue + 0.25 per starred repo)
+max_points_for_full_weight = 50
+weight_per_point = 0.02
 valid_label = "valid"
 ```
 
@@ -185,7 +182,7 @@ Response:
 Run with verbose logging:
 
 ```bash
-RUST_LOG=info ./target/release/bounty-server
+RUST_LOG=info ./target/release/bounty server
 ```
 
 Log levels:
@@ -212,7 +209,7 @@ After=network.target postgresql.service
 Type=simple
 User=bounty
 WorkingDirectory=/opt/bounty-challenge
-ExecStart=/opt/bounty-challenge/target/release/bounty-server
+ExecStart=/opt/bounty-challenge/target/release/bounty server
 Restart=always
 RestartSec=10
 Environment=DATABASE_URL=postgres://user:pass@localhost:5432/bounty
@@ -250,9 +247,9 @@ RUN cargo build --release
 
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
-COPY --from=builder /app/target/release/bounty-server /usr/local/bin/
+COPY --from=builder /app/target/release/bounty /usr/local/bin/
 EXPOSE 8080
-CMD ["bounty-server"]
+CMD ["bounty", "server"]
 ```
 
 ### Docker Compose

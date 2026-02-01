@@ -60,21 +60,13 @@ pub fn create_register_message(github_username: &str, timestamp: i64) -> String 
     format!("register_github:{}:{}", github_username, timestamp)
 }
 
-/// Create message for claiming bounties
-pub fn create_claim_message(issue_numbers: &[u32], timestamp: i64) -> String {
-    let issues_str = issue_numbers
-        .iter()
-        .map(|n| n.to_string())
-        .collect::<Vec<_>>()
-        .join(",");
-    format!("claim_bounties:{}:{}", issues_str, timestamp)
-}
-
 /// Check if timestamp is within acceptable window (5 minutes)
+/// Only allows past timestamps within the window (prevents replay with future timestamps)
 pub fn is_timestamp_valid(timestamp: i64) -> bool {
     let now = chrono::Utc::now().timestamp();
-    let window = 5 * 60;
-    (now - timestamp).abs() < window
+    let window = 5 * 60; // 5 minutes
+                         // Only allow past timestamps within window (prevents replay with future timestamps)
+    timestamp <= now && (now - timestamp) < window
 }
 
 #[cfg(test)]
@@ -96,5 +88,8 @@ mod tests {
         assert!(is_timestamp_valid(now));
         assert!(is_timestamp_valid(now - 60));
         assert!(!is_timestamp_valid(now - 600));
+        // Future timestamps should be rejected
+        assert!(!is_timestamp_valid(now + 60));
+        assert!(!is_timestamp_valid(now + 300));
     }
 }

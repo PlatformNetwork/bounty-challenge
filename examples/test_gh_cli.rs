@@ -15,26 +15,8 @@ fn main() {
         return;
     }
 
-    // Test 2: Check rate limit
-    println!("\n2. Checking GitHub API rate limit...");
-    match GhCli::check_rate_limit() {
-        Ok(rate) => {
-            println!(
-                "   ✓ Rate limit: {}/{} remaining",
-                rate.remaining, rate.limit
-            );
-            println!("   ✓ Resets in {} seconds", rate.seconds_until_reset());
-            if rate.is_low() {
-                println!("   ⚠ WARNING: Rate limit is LOW!");
-            }
-        }
-        Err(e) => {
-            println!("   ✗ Failed to check rate limit: {}", e);
-        }
-    }
-
-    // Test 3: List issues from bounty-challenge repo
-    println!("\n3. Listing issues from platformnetwork/bounty-challenge...");
+    // Test 2: List issues from bounty-challenge repo
+    println!("\n2. Listing issues from platformnetwork/bounty-challenge...");
     let gh = GhCli::new("platformnetwork", "bounty-challenge");
     match gh.list_all_issues() {
         Ok(issues) => {
@@ -72,32 +54,6 @@ fn main() {
         }
         Err(e) => {
             println!("   ✗ Failed to list issues: {}", e);
-        }
-    }
-
-    // Test 4: List valid bounties only
-    println!("\n4. Listing valid bounties only...");
-    match gh.list_valid_bounties() {
-        Ok(issues) => {
-            println!("   ✓ Found {} valid bounties", issues.len());
-        }
-        Err(e) => {
-            println!("   ✗ Failed to list valid bounties: {}", e);
-        }
-    }
-
-    // Test 5: Get a single issue
-    println!("\n5. Fetching single issue #436...");
-    match gh.get_issue(436) {
-        Ok(issue) => {
-            println!("   ✓ Issue #{}: {}", issue.number, issue.title);
-            println!("   - State: {}", issue.state);
-            println!("   - Author: @{}", issue.author.login);
-            println!("   - Labels: {:?}", issue.label_names());
-            println!("   - Valid bounty: {}", issue.is_valid_bounty());
-        }
-        Err(e) => {
-            println!("   ✗ Failed to get issue: {}", e);
         }
     }
 

@@ -64,6 +64,10 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | g
     && rm -rf /var/lib/apt/lists/* \
     && rm -rf /var/cache/apt/*
 
+# Create non-root user for security
+RUN groupadd --gid 1000 bounty && \
+    useradd --uid 1000 --gid 1000 --create-home bounty
+
 WORKDIR /app
 
 # Copy binaries from builder
@@ -75,10 +79,16 @@ COPY docker/entrypoint.sh /entrypoint.sh
 COPY docker/motd.txt /etc/motd
 RUN chmod +x /entrypoint.sh
 
+# Set ownership for app directory
+RUN chown -R bounty:bounty /app
+
 # Environment
 ENV RUST_LOG=info,bounty_challenge=debug
 ENV CHALLENGE_HOST=0.0.0.0
 ENV CHALLENGE_PORT=8080
+
+# Switch to non-root user
+USER bounty
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \

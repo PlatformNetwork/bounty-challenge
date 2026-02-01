@@ -10,7 +10,7 @@ use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::process::Command;
-use tracing::{debug, error, info, warn};
+use tracing::{error, info, warn};
 
 /// Issue data from gh CLI
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -113,16 +113,6 @@ impl GhCli {
             .unwrap_or(false)
     }
 
-    /// Check authentication status
-    pub fn check_auth() -> Result<bool> {
-        let output = Command::new("gh")
-            .args(["auth", "status"])
-            .output()
-            .context("Failed to run gh auth status")?;
-
-        Ok(output.status.success())
-    }
-
     /// Get the repo string (owner/repo)
     fn repo_string(&self) -> String {
         format!("{}/{}", self.owner, self.repo)
@@ -170,138 +160,6 @@ impl GhCli {
             self.repo_string()
         );
         Ok(issues)
-    }
-
-    /// List only closed issues with valid label
-    pub fn list_valid_bounties(&self) -> Result<Vec<GhIssue>> {
-        info!(
-            "Fetching valid bounties from {} using gh CLI",
-            self.repo_string()
-        );
-
-        let output = Command::new("gh")
-            .args([
-                "issue",
-                "list",
-                "--repo",
-                &self.repo_string(),
-                "--state",
-                "closed",
-                "--label",
-                "valid",
-                "--limit",
-                "10000",
-                "--json",
-                "number,title,body,state,author,labels,createdAt,updatedAt,closedAt,url",
-            ])
-            .env("GH_TOKEN", get_gh_token().unwrap_or_default())
-            .output()
-            .context("Failed to run gh issue list")?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            error!("gh issue list failed: {}", stderr);
-            anyhow::bail!("gh issue list failed: {}", stderr);
-        }
-
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let issues: Vec<GhIssue> =
-            serde_json::from_str(&stdout).context("Failed to parse gh issue list output")?;
-
-        info!(
-            "Fetched {} valid bounties from {}",
-            issues.len(),
-            self.repo_string()
-        );
-        Ok(issues)
-    }
-
-    /// Get a single issue by number
-    pub fn get_issue(&self, number: u32) -> Result<GhIssue> {
-        debug!("Fetching issue #{} from {}", number, self.repo_string());
-
-        let output = Command::new("gh")
-            .args([
-                "issue",
-                "view",
-                &number.to_string(),
-                "--repo",
-                &self.repo_string(),
-                "--json",
-                "number,title,body,state,author,labels,createdAt,updatedAt,closedAt,url",
-            ])
-            .env("GH_TOKEN", get_gh_token().unwrap_or_default())
-            .output()
-            .context("Failed to run gh issue view")?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            anyhow::bail!("gh issue view failed: {}", stderr);
-        }
-
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let issue: GhIssue =
-            serde_json::from_str(&stdout).context("Failed to parse gh issue view output")?;
-
-        Ok(issue)
-    }
-
-    /// Check API rate limit using gh api
-    pub fn check_rate_limit() -> Result<RateLimitStatus> {
-        let output = Command::new("gh")
-            .args(["api", "rate_limit"])
-            .env("GH_TOKEN", get_gh_token().unwrap_or_default())
-            .output()
-            .context("Failed to run gh api rate_limit")?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            anyhow::bail!("gh api rate_limit failed: {}", stderr);
-        }
-
-        let stdout = String::from_utf8_lossy(&output.stdout);
-
-        #[derive(Deserialize)]
-        struct RateLimitResponse {
-            rate: RateCore,
-        }
-        #[derive(Deserialize)]
-        struct RateCore {
-            limit: u32,
-            remaining: u32,
-            reset: i64,
-            used: u32,
-        }
-
-        let data: RateLimitResponse =
-            serde_json::from_str(&stdout).context("Failed to parse rate limit response")?;
-
-        Ok(RateLimitStatus {
-            limit: data.rate.limit,
-            remaining: data.rate.remaining,
-            reset: data.rate.reset,
-            used: data.rate.used,
-        })
-    }
-}
-
-/// Rate limit status
-#[derive(Debug, Clone)]
-pub struct RateLimitStatus {
-    pub limit: u32,
-    pub remaining: u32,
-    pub reset: i64,
-    pub used: u32,
-}
-
-impl RateLimitStatus {
-    pub fn is_low(&self) -> bool {
-        self.remaining < 100
-    }
-
-    pub fn seconds_until_reset(&self) -> i64 {
-        let now = Utc::now().timestamp();
-        (self.reset - now).max(0)
     }
 }
 

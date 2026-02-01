@@ -11,6 +11,7 @@ use sp_core::{sr25519, Pair};
 use std::time::Duration;
 
 use crate::client::{BountyClient, RegisterRequest};
+use crate::style::truncate_hotkey;
 
 /// SS58 prefix for Bittensor (same as term-challenge)
 const SS58_PREFIX: u16 = 42;
@@ -39,10 +40,9 @@ pub async fn run_register_wizard(platform_url: &str) -> Result<()> {
     let (signing_key, hotkey) = enter_miner_key()?;
 
     println!(
-        "  {} Hotkey: {}...{}",
+        "  {} Hotkey: {}",
         style("✓").green(),
-        style(&hotkey[..8]).cyan(),
-        style(&hotkey[hotkey.len() - 4..]).cyan()
+        style(truncate_hotkey(&hotkey)).cyan()
     );
 
     // Step 2: Enter GitHub username
@@ -81,11 +81,7 @@ pub async fn run_register_wizard(platform_url: &str) -> Result<()> {
     println!("  {}", style("Review Registration").bold());
     println!("  {}", style("─".repeat(40)).dim());
     println!();
-    println!(
-        "  Hotkey:   {}...{}",
-        &hotkey[..12],
-        &hotkey[hotkey.len() - 4..]
-    );
+    println!("  Hotkey:   {}", truncate_hotkey(&hotkey));
     println!("  GitHub:   @{}", style(&github_username).cyan());
     println!();
 
@@ -103,11 +99,11 @@ pub async fn run_register_wizard(platform_url: &str) -> Result<()> {
     // Step 4: Sign and submit
     println!();
     let pb = ProgressBar::new_spinner();
-    pb.set_style(
-        ProgressStyle::default_spinner()
-            .template("  {spinner:.cyan} {msg}")
-            .expect("progress bar template should be valid"),
-    );
+    // The template is a constant string that is validated at compile time.
+    // Use unwrap_or_default for robustness in case indicatif changes behavior.
+    if let Ok(style) = ProgressStyle::default_spinner().template("  {spinner:.cyan} {msg}") {
+        pb.set_style(style);
+    }
     pb.set_message("Signing registration request...");
     pb.enable_steady_tick(Duration::from_millis(80));
 
@@ -141,7 +137,11 @@ pub async fn run_register_wizard(platform_url: &str) -> Result<()> {
                 println!();
                 println!("  {}", style("═".repeat(50)).dim());
                 println!();
-                println!("  {} Registration successful!", style("✓").green().bold());
+                if let Some(msg) = &response.message {
+                    println!("  {} {}", style("✓").green().bold(), msg);
+                } else {
+                    println!("  {} Registration successful!", style("✓").green().bold());
+                }
                 println!();
                 println!(
                     "  Your GitHub account {} is now linked.",
@@ -162,7 +162,11 @@ pub async fn run_register_wizard(platform_url: &str) -> Result<()> {
                 println!("  Check your status:");
                 println!(
                     "    {}",
-                    style(format!("bounty status --hotkey {}", &hotkey[..16])).yellow()
+                    style(format!(
+                        "bounty status --hotkey {}",
+                        truncate_hotkey(&hotkey)
+                    ))
+                    .yellow()
                 );
                 println!();
             } else {

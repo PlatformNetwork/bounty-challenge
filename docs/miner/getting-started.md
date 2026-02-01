@@ -67,13 +67,14 @@ Go to the bounty-challenge repository:
 
 - **PlatformNetwork/bounty-challenge**: https://github.com/PlatformNetwork/bounty-challenge/issues
 
-Create a quality issue about any Cortex project (bug report, feature request, etc.). Issues submitted to other repos (cortex, fabric) will NOT count for rewards.
+Create quality issues (bug reports, feature requests, security issues, documentation improvements). Each valid issue earns you **1 point** (50 points = 100% weight).
 
 ### 3. Wait for Validation
 
 Maintainers will review your issue:
-- ✅ Valid issue → Closed with `valid` label → Reward credited
-- ❌ Invalid issue → Closed without label → No reward
+- ✅ Valid issue → Closed with `valid` label → **+1 point**
+- ❌ Invalid issue → Marked with `invalid` label → **-0.5 points**
+- ⏳ Closed without labels → No reward or penalty
 
 ### 4. Check Your Status
 

@@ -61,6 +61,8 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/api/v1/github/:username", get(github_user_handler))
         .route("/api/v1/sync/status", get(sync_status_handler))
         .route("/api/v1/sync/trigger", post(trigger_sync_handler))
+        // CORS: Permissive policy is intentional - this is a public API accessed by
+        // browser-based tools, CLI clients, and third-party integrations from any origin
         .layer(CorsLayer::permissive())
         .with_state(state)
 }
@@ -77,10 +79,13 @@ async fn health_handler(State(state): State<Arc<AppState>>) -> Json<HealthRespon
 }
 
 async fn config_handler(State(state): State<Arc<AppState>>) -> Json<serde_json::Value> {
-    Json(
-        serde_json::to_value(state.challenge.config())
-            .expect("failed to serialize challenge config"),
-    )
+    match serde_json::to_value(state.challenge.config()) {
+        Ok(value) => Json(value),
+        Err(e) => {
+            error!("Failed to serialize config: {}", e);
+            Json(serde_json::json!({ "error": "Failed to load configuration" }))
+        }
+    }
 }
 
 async fn evaluate_handler(
@@ -121,7 +126,10 @@ async fn validate_handler(
 async fn leaderboard_handler(State(state): State<Arc<AppState>>) -> Json<serde_json::Value> {
     match state.challenge.get_leaderboard().await {
         Ok(lb) => Json(serde_json::json!({ "leaderboard": lb })),
-        Err(e) => Json(serde_json::json!({ "error": e.to_string() })),
+        Err(e) => {
+            error!("Failed to get leaderboard: {}", e);
+            Json(serde_json::json!({ "error": "Failed to load leaderboard" }))
+        }
     }
 }
 
@@ -157,10 +165,11 @@ async fn get_weights_handler(
     // Get current epoch (use provided or estimate from time)
     let epoch = query.epoch.unwrap_or_else(|| {
         // Estimate epoch from current time (12 second blocks on Bittensor)
+        // Fall back to 0 if system time is somehow before Unix epoch
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .expect("system time should be after Unix epoch")
-            .as_secs();
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
         now / 12
     });
 
@@ -232,13 +241,13 @@ async fn register_handler(
     State(state): State<Arc<AppState>>,
     Json(request): Json<RegisterRequest>,
 ) -> Json<RegisterResponse> {
-    // Validate timestamp (must be within 5 minutes)
+    // Validate timestamp (must be within 5 minutes, only past timestamps allowed)
     let now = chrono::Utc::now().timestamp();
-    if (now - request.timestamp).abs() > 300 {
+    if request.timestamp > now || (now - request.timestamp) > 300 {
         return Json(RegisterResponse {
             success: false,
             message: None,
-            error: Some("Timestamp expired. Please try again.".to_string()),
+            error: Some("Timestamp expired or invalid. Please try again.".to_string()),
         });
     }
 
@@ -315,7 +324,7 @@ async fn register_handler(
             Json(RegisterResponse {
                 success: false,
                 message: None,
-                error: Some(format!("Registration failed: {}", e)),
+                error: Some("Registration failed. Please try again later.".to_string()),
             })
         }
     }
@@ -409,6 +418,9 @@ pub struct InvalidIssueRequest {
     pub issue_url: String,
     pub issue_title: Option<String>,
     pub reason: Option<String>,
+    pub hotkey: String,
+    pub signature: String,
+    pub timestamp: i64,
 }
 
 #[derive(Debug, Serialize)]
@@ -422,6 +434,32 @@ async fn invalid_handler(
     State(state): State<Arc<AppState>>,
     Json(request): Json<InvalidIssueRequest>,
 ) -> Json<InvalidIssueResponse> {
+    // Validate timestamp (must be within 5 minutes, only past timestamps allowed)
+    let now = chrono::Utc::now().timestamp();
+    if request.timestamp > now || (now - request.timestamp) > 300 {
+        return Json(InvalidIssueResponse {
+            success: false,
+            message: None,
+            error: Some("Timestamp expired or invalid. Please try again.".to_string()),
+        });
+    }
+
+    // Verify signature
+    let message = format!(
+        "invalid_issue:{}:{}:{}",
+        request.issue_id,
+        request.github_username.to_lowercase(),
+        request.timestamp
+    );
+
+    if !crate::auth::verify_signature(&request.hotkey, &message, &request.signature) {
+        return Json(InvalidIssueResponse {
+            success: false,
+            message: None,
+            error: Some("Invalid signature. Make sure you're using the correct key.".to_string()),
+        });
+    }
+
     // Record the invalid issue (async)
     match state
         .storage
@@ -455,7 +493,7 @@ async fn invalid_handler(
             Json(InvalidIssueResponse {
                 success: false,
                 message: None,
-                error: Some(format!("Failed to record invalid issue: {}", e)),
+                error: Some("Failed to record invalid issue".to_string()),
             })
         }
     }
@@ -536,7 +574,7 @@ async fn issues_handler(
         })),
         Err(e) => {
             error!("Failed to get issues: {}", e);
-            Json(serde_json::json!({ "error": e.to_string() }))
+            Json(serde_json::json!({ "error": "Failed to retrieve issues" }))
         }
     }
 }
@@ -557,17 +595,23 @@ async fn pending_issues_handler(
         })),
         Err(e) => {
             error!("Failed to get pending issues: {}", e);
-            Json(serde_json::json!({ "error": e.to_string() }))
+            Json(serde_json::json!({ "error": "Failed to retrieve pending issues" }))
         }
     }
 }
 
 async fn issues_stats_handler(State(state): State<Arc<AppState>>) -> Json<serde_json::Value> {
     match state.storage.get_issues_stats().await {
-        Ok(stats) => Json(serde_json::to_value(stats).expect("failed to serialize issues stats")),
+        Ok(stats) => match serde_json::to_value(stats) {
+            Ok(value) => Json(value),
+            Err(e) => {
+                error!("Failed to serialize issues stats: {}", e);
+                Json(serde_json::json!({ "error": "Failed to retrieve issues statistics" }))
+            }
+        },
         Err(e) => {
             error!("Failed to get issues stats: {}", e);
-            Json(serde_json::json!({ "error": e.to_string() }))
+            Json(serde_json::json!({ "error": "Failed to retrieve issues statistics" }))
         }
     }
 }
@@ -577,13 +621,17 @@ async fn hotkey_details_handler(
     Path(hotkey): Path<String>,
 ) -> Json<serde_json::Value> {
     match state.storage.get_hotkey_details(&hotkey).await {
-        Ok(Some(details)) => {
-            Json(serde_json::to_value(details).expect("failed to serialize hotkey details"))
-        }
+        Ok(Some(details)) => match serde_json::to_value(details) {
+            Ok(value) => Json(value),
+            Err(e) => {
+                error!("Failed to serialize hotkey details: {}", e);
+                Json(serde_json::json!({ "error": "Failed to retrieve hotkey details" }))
+            }
+        },
         Ok(None) => Json(serde_json::json!({ "error": "Hotkey not found" })),
         Err(e) => {
             error!("Failed to get hotkey details: {}", e);
-            Json(serde_json::json!({ "error": e.to_string() }))
+            Json(serde_json::json!({ "error": "Failed to retrieve hotkey details" }))
         }
     }
 }
@@ -593,13 +641,17 @@ async fn github_user_handler(
     Path(username): Path<String>,
 ) -> Json<serde_json::Value> {
     match state.storage.get_github_user_details(&username).await {
-        Ok(Some(details)) => {
-            Json(serde_json::to_value(details).expect("failed to serialize GitHub user details"))
-        }
+        Ok(Some(details)) => match serde_json::to_value(details) {
+            Ok(value) => Json(value),
+            Err(e) => {
+                error!("Failed to serialize GitHub user details: {}", e);
+                Json(serde_json::json!({ "error": "Failed to retrieve GitHub user details" }))
+            }
+        },
         Ok(None) => Json(serde_json::json!({ "error": "GitHub user not found" })),
         Err(e) => {
             error!("Failed to get GitHub user details: {}", e);
-            Json(serde_json::json!({ "error": e.to_string() }))
+            Json(serde_json::json!({ "error": "Failed to retrieve GitHub user details" }))
         }
     }
 }
@@ -612,16 +664,47 @@ async fn sync_status_handler(State(state): State<Arc<AppState>>) -> Json<serde_j
         })),
         Err(e) => {
             error!("Failed to get sync status: {}", e);
-            Json(serde_json::json!({ "error": e.to_string() }))
+            Json(serde_json::json!({ "error": "Failed to retrieve sync status" }))
         }
     }
 }
 
-async fn trigger_sync_handler(State(state): State<Arc<AppState>>) -> Json<serde_json::Value> {
+/// Request body for sync trigger (requires authentication)
+#[derive(Debug, Deserialize)]
+pub struct SyncTriggerRequest {
+    pub hotkey: String,
+    pub signature: String,
+    pub timestamp: i64,
+}
+
+async fn trigger_sync_handler(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<SyncTriggerRequest>,
+) -> Json<serde_json::Value> {
+    // Validate timestamp (must be within 5 minutes, only past timestamps allowed)
+    let now = chrono::Utc::now().timestamp();
+    if request.timestamp > now || (now - request.timestamp) > 300 {
+        return Json(
+            serde_json::json!({ "error": "Timestamp expired or invalid. Please try again." }),
+        );
+    }
+
+    // Verify signature
+    let message = format!("sync_trigger:{}", request.timestamp);
+
+    if !crate::auth::verify_signature(&request.hotkey, &message, &request.signature) {
+        return Json(
+            serde_json::json!({ "error": "Invalid signature. Make sure you're using the correct key." }),
+        );
+    }
+
     // Get target repos
     let repos = match state.storage.get_active_repos().await {
         Ok(r) => r,
-        Err(e) => return Json(serde_json::json!({ "error": e.to_string() })),
+        Err(e) => {
+            error!("Failed to get active repos: {}", e);
+            return Json(serde_json::json!({ "error": "Failed to get repositories" }));
+        }
     };
 
     let mut synced = 0;
@@ -635,7 +718,7 @@ async fn trigger_sync_handler(State(state): State<Arc<AppState>>) -> Json<serde_
             }
             Err(e) => {
                 error!("Failed to sync {}/{}: {}", repo.owner, repo.repo, e);
-                errors.push(format!("{}/{}: {}", repo.owner, repo.repo, e));
+                errors.push(format!("{}/{}", repo.owner, repo.repo));
             }
         }
     }

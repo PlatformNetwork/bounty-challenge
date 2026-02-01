@@ -118,11 +118,6 @@ impl GitHubClient {
         }
     }
 
-    pub fn with_token(mut self, token: String) -> Self {
-        self.token = Some(token);
-        self
-    }
-
     /// Check if authenticated
     pub fn is_authenticated(&self) -> bool {
         self.token.is_some()
@@ -171,111 +166,6 @@ impl GitHubClient {
             reset: data.rate.reset,
             used: data.rate.used,
         })
-    }
-
-    /// Parse rate limit headers from response (used for monitoring)
-    #[allow(dead_code)]
-    fn parse_rate_limit_headers(response: &reqwest::Response) -> Option<RateLimitInfo> {
-        let limit = response
-            .headers()
-            .get("x-ratelimit-limit")
-            .and_then(|v| v.to_str().ok())
-            .and_then(|v| v.parse().ok())?;
-        let remaining = response
-            .headers()
-            .get("x-ratelimit-remaining")
-            .and_then(|v| v.to_str().ok())
-            .and_then(|v| v.parse().ok())?;
-        let reset = response
-            .headers()
-            .get("x-ratelimit-reset")
-            .and_then(|v| v.to_str().ok())
-            .and_then(|v| v.parse().ok())?;
-        let used = response
-            .headers()
-            .get("x-ratelimit-used")
-            .and_then(|v| v.to_str().ok())
-            .and_then(|v| v.parse().ok())
-            .unwrap_or(0);
-
-        Some(RateLimitInfo {
-            limit,
-            remaining,
-            reset,
-            used,
-        })
-    }
-
-    /// Wait if rate limit is low (used for throttling)
-    #[allow(dead_code)]
-    async fn handle_rate_limit(&self, rate_info: &RateLimitInfo) {
-        if rate_info.is_low() {
-            let wait_secs = rate_info.seconds_until_reset().min(300) as u64; // Max 5 min wait
-            warn!(
-                "GitHub rate limit low ({}/{} remaining), waiting {} seconds",
-                rate_info.remaining, rate_info.limit, wait_secs
-            );
-            tokio::time::sleep(tokio::time::Duration::from_secs(wait_secs)).await;
-        }
-    }
-
-    pub async fn get_closed_issues_with_valid(
-        &self,
-        since: Option<DateTime<Utc>>,
-    ) -> Result<Vec<GitHubIssue>> {
-        let mut all_issues = Vec::new();
-        let mut page = 1;
-        let per_page = 100;
-
-        loop {
-            let mut url = format!(
-                "{}/repos/{}/{}/issues?state=closed&per_page={}&page={}",
-                GITHUB_API_BASE, self.owner, self.repo, per_page, page
-            );
-
-            if let Some(since_date) = since {
-                // Use Z format instead of +00:00 (GitHub API doesn't handle unescaped +)
-                url.push_str(&format!(
-                    "&since={}",
-                    since_date.format("%Y-%m-%dT%H:%M:%SZ")
-                ));
-            }
-
-            debug!("Fetching issues page {}: {}", page, url);
-
-            let response = self.build_request(&url).send().await?;
-
-            if !response.status().is_success() {
-                let status = response.status();
-                let body = response.text().await.unwrap_or_default();
-                warn!("GitHub API error {}: {}", status, body);
-                break;
-            }
-
-            let issues: Vec<GitHubIssue> = response.json().await?;
-            let count = issues.len();
-
-            // Filter to only closed issues with "valid" label
-            let valid_issues: Vec<_> = issues.into_iter().filter(|i| i.is_valid_bounty()).collect();
-
-            info!(
-                "Page {}: found {} issues, {} valid",
-                page,
-                count,
-                valid_issues.len()
-            );
-            all_issues.extend(valid_issues);
-
-            if count < per_page {
-                break;
-            }
-            page += 1;
-
-            // Rate limit protection
-            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-        }
-
-        Ok(all_issues)
     }
 
     /// Fetch all issues (open and closed)

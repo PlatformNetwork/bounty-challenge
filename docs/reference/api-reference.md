@@ -126,6 +126,9 @@ Get status for a specific hotkey.
   "registered": true,
   "github_username": "johndoe",
   "valid_issues_count": 5,
+  "invalid_issues_count": 2,
+  "balance": 3,
+  "is_penalized": false,
   "weight": 0.05
 }
 ```
@@ -136,6 +139,9 @@ Get status for a specific hotkey.
   "registered": false,
   "github_username": null,
   "valid_issues_count": null,
+  "invalid_issues_count": null,
+  "balance": null,
+  "is_penalized": false,
   "weight": null
 }
 ```
@@ -186,8 +192,274 @@ Get challenge statistics.
 {
   "total_bounties": 150,
   "total_miners": 25,
+  "total_invalid": 10,
+  "penalized_miners": 3,
   "challenge_id": "bounty-challenge",
   "version": "0.1.0"
+}
+```
+
+---
+
+### Record Invalid Issue
+
+Record an invalid issue (maintainers only).
+
+**POST** `/invalid`
+
+**Request Body:**
+```json
+{
+  "issue_id": 123,
+  "repo_owner": "PlatformNetwork",
+  "repo_name": "bounty-challenge",
+  "github_username": "johndoe",
+  "issue_url": "https://github.com/PlatformNetwork/bounty-challenge/issues/123",
+  "issue_title": "Optional title",
+  "reason": "Optional reason for marking invalid"
+}
+```
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Recorded invalid issue #123 by @johndoe"
+}
+```
+
+**Error Response:**
+```json
+{
+  "success": false,
+  "error": "Failed to record invalid issue: <error message>"
+}
+```
+
+---
+
+### List Issues
+
+Get a list of issues from the cache.
+
+**GET** `/issues`
+
+**Query Parameters:**
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `state` | string | - | Filter by issue state (open, closed) |
+| `label` | string | - | Filter by label |
+| `limit` | integer | 100 | Maximum number of issues to return (max: 1000) |
+| `offset` | integer | 0 | Number of issues to skip |
+
+**Response:**
+```json
+{
+  "issues": [
+    {
+      "id": 123,
+      "title": "Issue title",
+      "state": "closed",
+      "labels": ["valid"],
+      "user": "johndoe",
+      "created_at": "2025-01-15T10:00:00Z",
+      "closed_at": "2025-01-16T15:30:00Z"
+    }
+  ],
+  "count": 10,
+  "limit": 100,
+  "offset": 0
+}
+```
+
+---
+
+### List Pending Issues
+
+Get a list of pending (unprocessed) issues.
+
+**GET** `/issues/pending`
+
+**Query Parameters:**
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `limit` | integer | 100 | Maximum number of issues to return (max: 1000) |
+| `offset` | integer | 0 | Number of issues to skip |
+
+**Response:**
+```json
+{
+  "issues": [
+    {
+      "id": 456,
+      "title": "Pending issue title",
+      "state": "open",
+      "labels": [],
+      "user": "alice",
+      "created_at": "2025-01-17T08:00:00Z"
+    }
+  ],
+  "count": 5,
+  "limit": 100,
+  "offset": 0
+}
+```
+
+---
+
+### Issues Statistics
+
+Get statistics about issues.
+
+**GET** `/issues/stats`
+
+**Response:**
+```json
+{
+  "total_issues": 500,
+  "open_issues": 50,
+  "closed_issues": 450,
+  "valid_issues": 200,
+  "invalid_issues": 30,
+  "pending_issues": 20
+}
+```
+
+---
+
+### Hotkey Details
+
+Get detailed information for a specific hotkey.
+
+**GET** `/hotkey/{hotkey}`
+
+**Path Parameters:**
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `hotkey` | string | SS58-encoded hotkey |
+
+**Response:**
+```json
+{
+  "hotkey": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+  "github_username": "johndoe",
+  "registered_at": "2025-01-10T12:00:00Z",
+  "valid_issues_count": 15,
+  "invalid_issues_count": 2,
+  "balance": 13,
+  "is_penalized": false,
+  "weight": 0.15,
+  "recent_issues": [
+    {
+      "id": 123,
+      "title": "Fixed bug in API",
+      "resolved_at": "2025-01-16T15:30:00Z"
+    }
+  ]
+}
+```
+
+**Not Found Response:**
+```json
+{
+  "error": "Hotkey not found"
+}
+```
+
+---
+
+### GitHub User Details
+
+Get detailed information for a GitHub user.
+
+**GET** `/github/{username}`
+
+**Path Parameters:**
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `username` | string | GitHub username |
+
+**Response:**
+```json
+{
+  "github_username": "johndoe",
+  "hotkey": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+  "registered_at": "2025-01-10T12:00:00Z",
+  "valid_issues_count": 15,
+  "invalid_issues_count": 2,
+  "balance": 13,
+  "is_penalized": false,
+  "weight": 0.15,
+  "recent_issues": [
+    {
+      "id": 123,
+      "title": "Fixed bug in API",
+      "resolved_at": "2025-01-16T15:30:00Z"
+    }
+  ]
+}
+```
+
+**Not Found Response:**
+```json
+{
+  "error": "GitHub user not found"
+}
+```
+
+---
+
+### Sync Status
+
+Get the current synchronization status for all repositories.
+
+**GET** `/sync/status`
+
+**Response:**
+```json
+{
+  "repos": [
+    {
+      "owner": "PlatformNetwork",
+      "repo": "bounty-challenge",
+      "last_synced_at": "2025-01-17T10:00:00Z",
+      "issues_count": 150,
+      "status": "synced"
+    }
+  ],
+  "issues_stats": {
+    "total_issues": 500,
+    "open_issues": 50,
+    "closed_issues": 450
+  }
+}
+```
+
+---
+
+### Trigger Sync
+
+Trigger a manual synchronization of issues from GitHub.
+
+**POST** `/sync/trigger`
+
+**Response (Success):**
+```json
+{
+  "success": true,
+  "issues_synced": 150,
+  "errors": []
+}
+```
+
+**Response (Partial Failure):**
+```json
+{
+  "success": false,
+  "issues_synced": 100,
+  "errors": [
+    "PlatformNetwork/other-repo: rate limit exceeded"
+  ]
 }
 ```
 

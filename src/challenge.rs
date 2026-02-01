@@ -56,13 +56,6 @@ pub struct BountyChallenge {
 }
 
 impl BountyChallenge {
-    pub fn new(owner: &str, repo: &str, storage: Arc<PgStorage>) -> Self {
-        Self {
-            github: GitHubClient::new(owner, repo),
-            storage,
-        }
-    }
-
     pub fn new_with_storage(storage: Arc<PgStorage>) -> Self {
         Self {
             github: GitHubClient::new("PlatformNetwork", "bounty-challenge"),
@@ -199,20 +192,18 @@ impl BountyChallenge {
             score: weight,
         };
 
-        Ok(EvaluationResponse::success(
-            request_id,
-            weight,
-            serde_json::to_value(&result).expect("failed to serialize weight result"),
-        ))
-    }
+        let result_json = serde_json::to_value(&result).unwrap_or_else(|e| {
+            warn!("Failed to serialize claim result: {}", e);
+            serde_json::json!({
+                "claimed": [],
+                "rejected": [],
+                "total_valid": 0,
+                "score": weight,
+                "error": "Failed to serialize result"
+            })
+        });
 
-    // Note: Legacy scoring method - weights are now calculated in PgStorage
-    #[allow(dead_code)]
-    fn calculate_score(&self, valid_issues: u32) -> f64 {
-        // Logarithmic scoring to prevent gaming
-        // score = log2(1 + valid_issues) / 10
-        // This gives diminishing returns for more issues
-        ((1.0 + valid_issues as f64).ln() / std::f64::consts::LN_2) / 10.0
+        Ok(EvaluationResponse::success(request_id, weight, result_json))
     }
 
     pub async fn get_leaderboard(&self) -> Result<Vec<serde_json::Value>, ChallengeError> {

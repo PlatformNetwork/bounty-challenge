@@ -28,16 +28,18 @@ pub struct DeviceCodeResponse {
 
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
-#[allow(dead_code)]
 enum TokenResponse {
     Success {
         access_token: String,
-        token_type: String,
-        scope: String,
+        #[serde(rename = "token_type")]
+        _token_type: String,
+        #[serde(rename = "scope")]
+        _scope: String,
     },
     Pending {
         error: String,
-        error_description: Option<String>,
+        #[serde(rename = "error_description")]
+        _error_description: Option<String>,
     },
 }
 
@@ -59,7 +61,12 @@ impl GitHubDeviceAuth {
 
     pub fn from_env() -> Result<Self> {
         let config = crate::config::Config::load()?;
-        Ok(Self::new(config.github_client_id()))
+        let client_id = config.github_client_id().ok_or_else(|| {
+            anyhow::anyhow!(
+                "GitHub Client ID not configured. Set GITHUB_CLIENT_ID environment variable."
+            )
+        })?;
+        Ok(Self::new(client_id))
     }
 
     /// Step 1: Request device code

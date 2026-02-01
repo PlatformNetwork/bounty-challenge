@@ -29,7 +29,7 @@ Bounty Challenge is a decentralized issue reward system on the Bittensor network
 ## Features
 
 - **Centralized Bug Bounty**: All issues tracked in this repository
-- **Adaptive Rewards**: Dynamic weight calculation based on daily activity
+- **Points-Based Rewards**: 1 point per valid issue, 0.25 points per starred repo
 - **Cryptographic Registration**: sr25519 signature-based hotkey linking
 - **Real-Time Leaderboard**: Track miner standings and valid issues
 - **PostgreSQL Backend**: Production-ready storage via Platform integration
@@ -68,64 +68,65 @@ Bounty Challenge uses a **point-based reward system**.
 
 ### Point System
 
-Each resolved issue gives you points:
+Each valid issue earns you 1 point:
 
-| Repository | Points per Issue | Issues for 100% |
-|------------|-----------------|-----------------|
-| **PlatformNetwork/bounty-challenge** | 5 points | 20 issues |
+| Source | Points | Description |
+|--------|--------|-------------|
+| **Valid Issue** | 1 point | Issue closed with `valid` label |
+| **Starred Repo** | 0.25 points | Each starred target repository |
 
 ### Weight Calculation
 
 Your weight is calculated from your total points:
 
-$$W_{user} = \min\left(\frac{points}{100}, 1.0\right) + W_{stars}$$
+$$W_{user} = \min(points \times 0.02, 1.0)$$
 
 Where:
-- **100 points = 100% weight** (maximum)
-- $W_{stars}$ = star bonus (see below)
+- **50 points = 100% weight** (maximum)
+- Each point = 2% weight
 
 **Examples:**
 
-| Miner | Issues | Repository | Points | Weight |
-|-------|--------|------------|--------|--------|
-| A | 7 | cortex | 7 × 5 = 35 | 35% |
-| B | 10 | cortex | 10 × 5 = 50 | 50% |
-| C | 20 | cortex | 20 × 5 = 100 | 100% |
+| Miner | Valid Issues | Stars | Total Points | Weight |
+|-------|-------------|-------|--------------|--------|
+| A | 10 | 0 | 10 | 20% |
+| B | 25 | 4 | 26 | 52% |
+| C | 50 | 5 | 51.25 | 100% (capped) |
 
 See [Scoring Documentation](docs/reference/scoring.md) for complete specifications.
 
 ### Penalty System
 
-> **WARNING**: Invalid issues (closed without `valid` label) count against you!
+> **WARNING**: Issues marked with `invalid` label count against you!
 
 | Rule | Description |
 |------|-------------|
-| **Ratio 1:1** | 1 invalid issue allowed per valid issue |
-| **Penalty** | If `invalid > valid`, weight = 0 |
-| **Recovery** | Submit valid issues to return balance >= 0 |
+| **Penalty** | -0.5 points per invalid issue |
+| **Zero Weight** | If net points < 0, weight = 0 |
+| **Recovery** | Submit valid issues to restore positive balance |
 
 **Formula:**
 ```
-balance = valid_issues - invalid_issues
-weight = balance >= 0 ? normal_weight : 0
+net_points = valid_issues - (invalid_issues × 0.5)
+weight = net_points > 0 ? (net_points × 0.02) : 0
 ```
 
-**Example:** (assuming cortex issues = 5 points each)
+**Examples:**
 
-| Miner | Valid | Invalid | Balance | Points | Weight |
-|-------|-------|---------|---------|--------|--------|
-| A | 5 | 3 | +2 | 25 pts | 25% |
-| B | 3 | 5 | -2 | - | 0% (penalized) |
+| Miner | Valid | Invalid | Net Points | Weight |
+|-------|-------|---------|------------|--------|
+| A | 10 | 2 | 9 | 18% |
+| B | 3 | 8 | -1 | 0% (penalized) |
 
 ### Star Bonus
 
-Earn extra credits by starring our repositories!
+Earn extra points by starring our repositories!
 
 | Requirement | Bonus |
 |-------------|-------|
 | **Minimum** | 2 valid issues resolved |
-| **Bonus** | +0.25 weight per starred repo |
-| **Maximum** | +1.25 (5 repos × 0.25) |
+| **Bonus** | +0.25 points per starred repo |
+| **Maximum** | +1.25 points (5 repos × 0.25) |
 
 **Repositories to star:**
 
@@ -138,20 +139,20 @@ Earn extra credits by starring our repositories!
 | PlatformNetwork/bounty-challenge | https://github.com/PlatformNetwork/bounty-challenge |
 
 **Example:**
-- Miner with 5 valid issues + 3 starred repos = base weight + 0.75 bonus
-- Miner with 1 valid issue + 5 starred repos = base weight only (need 2+ valid issues first)
+- Miner with 10 valid issues + 4 starred repos = 11 points = 22% weight
+- Miner with 1 valid issue + 5 starred repos = 1 point only (need 2+ valid issues for star bonus)
 
 ## Target Repository
 
-Analyze this project to find bugs, security issues, and improvements:
+Submit issues about bugs, security problems, or improvements you find:
 
-| Repository | Description | Points | For 100% Weight | URL |
-|------------|-------------|--------|-----------------|-----|
-| **PlatformNetwork/bounty-challenge** | Bounty Challenge repository | **5 points** | 20 issues | https://github.com/PlatformNetwork/bounty-challenge |
+| Repository | Points per Issue | For 100% Weight | URL |
+|------------|-----------------|-----------------|-----|
+| **PlatformNetwork/bounty-challenge** | **1 point** | 50 issues | https://github.com/PlatformNetwork/bounty-challenge |
 
-> **Note:** 100 points = 100% weight. 20 valid issues in cortex = maximum weight!
+> **Note:** 50 points = 100% weight. Star 5 repos for an additional 1.25 points bonus!
 
-> **Important:** Analyze the bounty-challenge repository for bugs, then submit your issue reports to **this repository** ([PlatformNetwork/bounty-challenge](https://github.com/PlatformNetwork/bounty-challenge/issues)) to receive rewards.
+> **Important:** All issues must be submitted to **this repository** ([PlatformNetwork/bounty-challenge](https://github.com/PlatformNetwork/bounty-challenge/issues)) to receive rewards.
 
 ## Quick Start for Miners
 
@@ -255,7 +256,7 @@ bounty leaderboard
 |---------|-------------|
 | `bounty` | Interactive registration wizard (default) |
 | `bounty wizard` | Same as above |
-| `bounty status -h <hotkey>` | Check your status and rewards |
+| `bounty status -k <hotkey>` | Check your status and rewards |
 | `bounty leaderboard` | View current standings |
 | `bounty config` | Show challenge configuration |
 | `bounty server` | Run in server mode (subnet operators) |
@@ -327,24 +328,36 @@ bounty-challenge/
 ├── src/
 │   ├── main.rs              # Server entry point
 │   ├── lib.rs               # Library exports
+│   ├── auth.rs              # Signature verification
 │   ├── challenge.rs         # Challenge implementation
+│   ├── config.rs            # Configuration loading
+│   ├── gh_cli.rs            # GitHub CLI integration
 │   ├── github.rs            # GitHub API client
+│   ├── github_oauth.rs      # GitHub OAuth device flow
+│   ├── metagraph.rs         # Metagraph caching
 │   ├── pg_storage.rs        # PostgreSQL storage
 │   ├── server.rs            # HTTP server & routes
-│   ├── discovery.rs         # Auto-scan for valid issues
-│   └── bin/bounty/          # CLI application
-│       ├── main.rs          # CLI entry point
-│       ├── client.rs        # Bridge API client
-│       ├── wizard/          # Registration wizard
-│       └── commands/        # CLI commands
-├── migrations/
-│   └── 001_initial.sql      # PostgreSQL schema
+│   └── bin/
+│       ├── bounty/          # CLI application
+│       │   ├── main.rs      # CLI entry point
+│       │   ├── client.rs    # Bridge API client
+│       │   ├── style.rs     # Terminal styling
+│       │   ├── wizard/      # Registration wizard
+│       │   └── commands/    # CLI commands
+│       └── bounty-health-server.rs  # Health check server
+├── migrations/              # PostgreSQL migrations
+│   ├── 001_schema.sql
+│   ├── ...
+│   └── 011_fix_negative_weight.sql
 ├── docs/
+│   ├── anti-abuse.md        # Anti-abuse documentation
 │   ├── miner/               # Miner guides
-│   ├── reference/           # API references
+│   ├── reference/           # API & scoring references
 │   └── validator/           # Validator guides
 ├── .github/workflows/
-│   └── protect-valid-label.yml # Label protection
+│   ├── ci.yml               # CI pipeline
+│   ├── protect-valid-label.yml  # Label protection
+│   └── version-check.yml    # Version validation
 ├── config.toml              # Configuration
 └── assets/
     └── banner.jpg           # Banner image
@@ -362,6 +375,7 @@ bounty-challenge/
 - **Reference:**
   - [Scoring & Rewards](docs/reference/scoring.md)
   - [API Reference](docs/reference/api-reference.md)
+  - [Anti-Abuse Mechanisms](docs/anti-abuse.md)
 
 ## Development
 

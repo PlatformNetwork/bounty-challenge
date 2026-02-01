@@ -8,7 +8,7 @@ pub async fn run(platform_url: &str, hotkey: Option<String>) -> Result<()> {
 
     println!("Platform:  {}", platform_url);
     if let Some(ref hk) = hotkey {
-        println!("Hotkey:    {}...{}", &hk[..8], &hk[hk.len() - 4..]);
+        println!("Hotkey:    {}", crate::style::truncate_hotkey(hk));
     }
     println!();
 

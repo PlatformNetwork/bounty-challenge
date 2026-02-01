@@ -6,7 +6,7 @@ use anyhow::Result;
 pub async fn run(rpc: &str, hotkey: &str) -> Result<()> {
     print_header("Miner Status");
 
-    println!("Hotkey: {}...{}", &hotkey[..8], &hotkey[hotkey.len() - 4..]);
+    println!("Hotkey: {}", crate::style::truncate_hotkey(hotkey));
     println!();
 
     // Use BountyClient for API consistency
@@ -25,12 +25,34 @@ pub async fn run(rpc: &str, hotkey: &str) -> Result<()> {
                     "Valid Issues:     {}",
                     style_bold(&status.valid_issues_count.unwrap_or(0).to_string())
                 );
+                if let Some(invalid) = status.invalid_issues_count {
+                    println!(
+                        "Invalid Issues:   {}",
+                        if invalid > 0 {
+                            style_yellow(&invalid.to_string())
+                        } else {
+                            style_dim(&invalid.to_string())
+                        }
+                    );
+                }
+                if let Some(balance) = status.balance {
+                    println!(
+                        "Balance:          {}",
+                        if balance < 0 {
+                            style_red(&balance.to_string())
+                        } else {
+                            style_green(&format!("+{}", balance))
+                        }
+                    );
+                }
                 println!(
-                    "Current Score:    {}",
-                    style_green(&format!("{:.4}", status.weight.unwrap_or(0.0)))
+                    "Current Weight:   {}",
+                    style_green(&format!("{:.2}%", status.weight.unwrap_or(0.0) * 100.0))
                 );
                 if status.is_penalized {
-                    print_warning("Account is currently penalized due to invalid issues");
+                    println!();
+                    print_warning("Account is currently penalized due to negative balance");
+                    println!("  Submit valid issues to restore your balance >= 0");
                 }
             } else {
                 print_warning("Miner not registered.");

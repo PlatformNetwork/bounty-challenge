@@ -24,7 +24,7 @@ pub struct RegisterRequest {
 #[derive(Debug, Deserialize)]
 pub struct RegisterResponse {
     pub success: bool,
-    #[allow(dead_code)]
+    #[serde(default)]
     pub message: Option<String>,
     pub error: Option<String>,
 }
@@ -44,9 +44,9 @@ pub struct StatusResponse {
     pub registered: bool,
     pub github_username: Option<String>,
     pub valid_issues_count: Option<u64>,
-    #[allow(dead_code)]
+    #[serde(default)]
     pub invalid_issues_count: Option<u64>,
-    #[allow(dead_code)]
+    #[serde(default)]
     pub balance: Option<i64>,
     pub is_penalized: bool,
     pub weight: Option<f64>,
@@ -61,23 +61,14 @@ pub struct BountyClient {
 impl BountyClient {
     /// Create a new client pointing to platform server
     pub fn new(platform_url: &str) -> Self {
-        Self {
-            client: Client::builder()
-                .timeout(DEFAULT_TIMEOUT)
-                .build()
-                .expect("Failed to create HTTP client"),
-            base_url: platform_url.trim_end_matches('/').to_string(),
-        }
-    }
+        // Build HTTP client with timeout, falling back to default client if builder fails
+        let client = Client::builder()
+            .timeout(DEFAULT_TIMEOUT)
+            .build()
+            .unwrap_or_else(|_| Client::new());
 
-    /// Create client with custom timeout
-    #[allow(dead_code)]
-    pub fn with_timeout(platform_url: &str, timeout: Duration) -> Self {
         Self {
-            client: Client::builder()
-                .timeout(timeout)
-                .build()
-                .expect("Failed to create HTTP client"),
+            client,
             base_url: platform_url.trim_end_matches('/').to_string(),
         }
     }
@@ -148,7 +139,6 @@ impl BountyClient {
     }
 
     /// Get challenge stats
-    #[allow(dead_code)]
     pub async fn get_stats(&self) -> Result<serde_json::Value> {
         let url = self.bridge_url("stats");
         let resp = self.client.get(&url).send().await?;
