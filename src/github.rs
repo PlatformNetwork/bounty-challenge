@@ -80,6 +80,12 @@ impl GitHubIssue {
             .any(|l| l.name.to_lowercase() == "invalid")
     }
 
+    pub fn has_duplicate_label(&self) -> bool {
+        self.labels
+            .iter()
+            .any(|l| l.name.to_lowercase() == "duplicate")
+    }
+
     pub fn is_closed(&self) -> bool {
         self.state == "closed"
     }

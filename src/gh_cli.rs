@@ -51,6 +51,12 @@ impl GhIssue {
             .any(|l| l.name.to_lowercase() == "invalid")
     }
 
+    pub fn has_duplicate_label(&self) -> bool {
+        self.labels
+            .iter()
+            .any(|l| l.name.to_lowercase() == "duplicate")
+    }
+
     pub fn is_closed(&self) -> bool {
         self.state.to_lowercase() == "closed"
     }
@@ -198,6 +204,7 @@ pub async fn sync_repo_with_gh(
             Ok(change) => match change {
                 crate::pg_storage::LabelChange::BecameValid => result.became_valid += 1,
                 crate::pg_storage::LabelChange::BecameInvalid => result.became_invalid += 1,
+                crate::pg_storage::LabelChange::BecameDuplicate => result.became_duplicate += 1,
                 crate::pg_storage::LabelChange::LostValid => result.lost_valid += 1,
                 crate::pg_storage::LabelChange::None => {}
             },
@@ -239,6 +246,8 @@ pub struct SyncResult {
     pub became_valid: usize,
     /// Issues explicitly marked with "invalid" label
     pub became_invalid: usize,
+    /// Issues explicitly marked with "duplicate" label
+    pub became_duplicate: usize,
     pub lost_valid: usize,
     pub marked_deleted: usize,
     pub errors: usize,

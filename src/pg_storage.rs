@@ -83,6 +83,7 @@ pub struct LeaderboardEntry {
     pub valid_issues: i32,
     pub pending_issues: i32,
     pub invalid_issues: i32,
+    pub duplicate_issues: i32,
     pub total_points: i32,
     pub penalty_points: i32,
     pub net_points: i32,
@@ -641,7 +642,17 @@ impl PgStorage {
                 &[&hotkey],
             )
             .await?;
-        let penalty_points: f64 = invalid_row.get::<_, f64>(0);
+        let invalid_penalty: f64 = invalid_row.get::<_, f64>(0);
+
+        // Get user's duplicate penalty (0.5 penalty per duplicate issue) in last 24h
+        let duplicate_row = client
+            .query_one(
+                "SELECT COUNT(*)::FLOAT8 * 0.5 FROM duplicate_issues 
+                 WHERE hotkey = $1 AND recorded_at >= NOW() - INTERVAL '24 hours'",
+                &[&hotkey],
+            )
+            .await?;
+        let duplicate_penalty: f64 = duplicate_row.get::<_, f64>(0);
 
         // Get user's star bonus (0.25 points per starred repo)
         let github_username = self.get_github_by_hotkey(hotkey).await?.unwrap_or_default();
@@ -651,9 +662,9 @@ impl PgStorage {
             .unwrap_or(0);
         let star_points: f64 = star_count as f64 * 0.25;
 
-        // Net points = valid + stars - penalties
+        // Net points = valid + stars - penalties (invalid + duplicate)
         // If negative, weight is 0
-        let net_points = valid_points + star_points - penalty_points;
+        let net_points = valid_points + star_points - invalid_penalty - duplicate_penalty;
         if net_points <= 0.0 {
             return Ok(0.0);
         }
@@ -821,7 +832,7 @@ impl PgStorage {
     pub async fn get_extended_leaderboard(&self, limit: i32) -> Result<Vec<LeaderboardEntry>> {
         let client = self.pool.get().await?;
 
-        // Get all users with valid issues, pending issues, invalid issues, points, stars and weights
+        // Get all users with valid issues, pending issues, invalid issues, duplicate issues, points, stars and weights
         // ALL STATS ARE FOR LAST 24 HOURS ONLY
         let rows = client
             .query(
@@ -840,10 +851,20 @@ impl PgStorage {
                     SELECT 
                         r.hotkey,
                         COUNT(*) as invalid_count,
-                        (COUNT(*)::FLOAT * 2.0)::INTEGER as penalty_points  -- 2.0 penalty per invalid issue
+                        (COUNT(*)::FLOAT * 2.0)::INTEGER as invalid_penalty_points  -- 2.0 penalty per invalid issue
                     FROM github_registrations r
                     JOIN invalid_issues ii ON r.hotkey = ii.hotkey
                     WHERE ii.recorded_at >= NOW() - INTERVAL '24 hours'
+                    GROUP BY r.hotkey
+                ),
+                user_duplicate_24h AS (
+                    SELECT 
+                        r.hotkey,
+                        COUNT(*) as duplicate_count,
+                        (COUNT(*)::FLOAT * 0.5)::INTEGER as duplicate_penalty_points  -- 0.5 penalty per duplicate issue
+                    FROM github_registrations r
+                    JOIN duplicate_issues di ON r.hotkey = di.hotkey
+                    WHERE di.recorded_at >= NOW() - INTERVAL '24 hours'
                     GROUP BY r.hotkey
                 ),
                 user_pending_24h AS (
@@ -876,9 +897,10 @@ impl PgStorage {
                     COALESCE(uv.valid_count, 0)::INTEGER as valid_issues,
                     COALESCE(up.pending_count, 0)::INTEGER as pending_issues,
                     COALESCE(ui.invalid_count, 0)::INTEGER as invalid_issues,
+                    COALESCE(ud.duplicate_count, 0)::INTEGER as duplicate_issues,
                     COALESCE(uv.total_points, 0)::INTEGER as total_points,
-                    COALESCE(ui.penalty_points, 0)::INTEGER as penalty_points,
-                    (COALESCE(uv.total_points, 0) - COALESCE(ui.penalty_points, 0))::INTEGER as net_points,
+                    (COALESCE(ui.invalid_penalty_points, 0) + COALESCE(ud.duplicate_penalty_points, 0))::INTEGER as penalty_points,
+                    (COALESCE(uv.total_points, 0) - COALESCE(ui.invalid_penalty_points, 0) - COALESCE(ud.duplicate_penalty_points, 0))::INTEGER as net_points,
                     COALESCE(us.star_count, 0)::INTEGER as star_count,
                     COALESCE(us.starred_repos, ARRAY[]::TEXT[]) as starred_repos,
                     CASE 
@@ -891,10 +913,11 @@ impl PgStorage {
                 FROM github_registrations r
                 LEFT JOIN user_valid_24h uv ON r.hotkey = uv.hotkey
                 LEFT JOIN user_invalid_24h ui ON r.hotkey = ui.hotkey
+                LEFT JOIN user_duplicate_24h ud ON r.hotkey = ud.hotkey
                 LEFT JOIN user_pending_24h up ON LOWER(r.github_username) = up.username
                 LEFT JOIN user_stars us ON LOWER(r.github_username) = us.username
                 LEFT JOIN user_weights uw ON LOWER(r.github_username) = LOWER(uw.github_username)
-                WHERE COALESCE(uv.valid_count, 0) > 0 OR COALESCE(up.pending_count, 0) > 0 OR COALESCE(ui.invalid_count, 0) > 0
+                WHERE COALESCE(uv.valid_count, 0) > 0 OR COALESCE(up.pending_count, 0) > 0 OR COALESCE(ui.invalid_count, 0) > 0 OR COALESCE(ud.duplicate_count, 0) > 0
                 ORDER BY score DESC, net_points DESC, last_activity DESC NULLS LAST
                 LIMIT $1",
                 &[&(limit as i64)],
@@ -909,15 +932,16 @@ impl PgStorage {
                 valid_issues: r.get(2),
                 pending_issues: r.get(3),
                 invalid_issues: r.get(4),
-                total_points: r.get(5),
-                penalty_points: r.get(6),
-                net_points: r.get(7),
-                star_count: r.get(8),
-                starred_repos: r.get(9),
-                star_bonus: r.get(10),
-                score: r.get(11),
-                is_penalized: r.get(12),
-                last_activity: r.get(13),
+                duplicate_issues: r.get(5),
+                total_points: r.get(6),
+                penalty_points: r.get(7),
+                net_points: r.get(8),
+                star_count: r.get(9),
+                starred_repos: r.get(10),
+                star_bonus: r.get(11),
+                score: r.get(12),
+                is_penalized: r.get(13),
+                last_activity: r.get(14),
             })
             .collect())
     }
@@ -1270,6 +1294,7 @@ impl PgStorage {
         let new_labels: Vec<String> = issue.label_names();
         let has_valid = new_labels.contains(&"valid".to_string());
         let has_invalid = new_labels.contains(&"invalid".to_string());
+        let has_duplicate = new_labels.iter().any(|l| l.to_lowercase() == "duplicate");
         let _is_closed = issue.state == "closed";
 
         // Check previous state and labels
@@ -1280,23 +1305,33 @@ impl PgStorage {
             )
             .await?;
 
-        let (had_valid, had_invalid, _was_closed) = match prev_row {
+        let (had_valid, had_invalid, had_duplicate, _was_closed) = match prev_row {
             Some(r) => {
                 let prev_labels: Vec<String> = r.get(0);
                 let prev_state: String = r.get(1);
                 (
                     prev_labels.contains(&"valid".to_string()),
                     prev_labels.contains(&"invalid".to_string()),
+                    prev_labels.iter().any(|l| l.to_lowercase() == "duplicate"),
                     prev_state == "closed",
                 )
             }
-            None => (false, false, false),
+            None => (false, false, false, false),
         };
 
         // Helper to check if already recorded as invalid
         let already_recorded_invalid = client
             .query_opt(
                 "SELECT 1 FROM invalid_issues WHERE repo_owner = $1 AND repo_name = $2 AND issue_id = $3",
+                &[&repo_owner, &repo_name, &(issue.number as i64)],
+            )
+            .await?
+            .is_some();
+
+        // Helper to check if already recorded as duplicate
+        let already_recorded_duplicate = client
+            .query_opt(
+                "SELECT 1 FROM duplicate_issues WHERE repo_owner = $1 AND repo_name = $2 AND issue_id = $3",
                 &[&repo_owner, &repo_name, &(issue.number as i64)],
             )
             .await?
@@ -1309,6 +1344,13 @@ impl PgStorage {
             // Explicitly marked as invalid by maintainers
             if !already_recorded_invalid {
                 LabelChange::BecameInvalid
+            } else {
+                LabelChange::None
+            }
+        } else if has_duplicate && !had_duplicate {
+            // Explicitly marked as duplicate by maintainers
+            if !already_recorded_duplicate {
+                LabelChange::BecameDuplicate
             } else {
                 LabelChange::None
             }
@@ -1348,6 +1390,13 @@ impl PgStorage {
             // Already has invalid label - check if already recorded
             if !already_recorded_invalid {
                 LabelChange::BecameInvalid
+            } else {
+                LabelChange::None
+            }
+        } else if has_duplicate && had_duplicate {
+            // Already has duplicate label - check if already recorded
+            if !already_recorded_duplicate {
+                LabelChange::BecameDuplicate
             } else {
                 LabelChange::None
             }
@@ -1435,6 +1484,36 @@ impl PgStorage {
                         ],
                     )
                     .await?;
+            }
+            LabelChange::BecameDuplicate => {
+                // Record duplicate issue (-0.5 point penalty)
+                let hotkey = self
+                    .get_hotkey_by_github(&issue.user.login)
+                    .await
+                    .ok()
+                    .flatten();
+
+                client
+                    .execute(
+                        "INSERT INTO duplicate_issues (issue_id, repo_owner, repo_name, github_username, hotkey, issue_url, issue_title, reason)
+                         VALUES ($1, $2, $3, $4, $5, $6, $7, 'Marked as duplicate')
+                         ON CONFLICT (repo_owner, repo_name, issue_id) DO NOTHING",
+                        &[
+                            &(issue.number as i64),
+                            &repo_owner,
+                            &repo_name,
+                            &issue.user.login.to_lowercase(),
+                            &hotkey,
+                            &issue.html_url,
+                            &issue.title,
+                        ],
+                    )
+                    .await?;
+
+                warn!(
+                    "Issue #{} in {}/{} marked as DUPLICATE - recorded 0.5 point penalty for @{}",
+                    issue.number, repo_owner, repo_name, issue.user.login
+                );
             }
             LabelChange::None => {}
         }
@@ -2012,6 +2091,8 @@ pub enum LabelChange {
     BecameValid,
     /// Issue explicitly marked with "invalid" label by maintainers
     BecameInvalid,
+    /// Issue explicitly marked with "duplicate" label by maintainers
+    BecameDuplicate,
     LostValid,
 }
 
