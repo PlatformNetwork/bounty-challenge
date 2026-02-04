@@ -73,7 +73,7 @@ Create quality issues (bug reports, feature requests, security issues, documenta
 
 Maintainers will review your issue:
 - ✅ Valid issue → Closed with `valid` label → **+1 point**
-- ❌ Invalid issue → Marked with `invalid` label → **-0.5 points**
+- ❌ Invalid issue → Marked with `invalid` label → **-2 points**
 - ⏳ Closed without labels → No reward or penalty
 
 ### 4. Check Your Status

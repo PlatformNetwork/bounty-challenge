@@ -133,11 +133,11 @@ Issues marked with the `invalid` label incur penalties:
 
 | Action | Effect |
 |--------|--------|
-| **Invalid Issue** | -0.5 penalty points |
+| **Invalid Issue** | -2 penalty points |
 
 ### Balance Calculation
 
-$$balance = valid_{issues} - (invalid_{issues} \times 0.5)$$
+$$balance = valid_{issues} - (invalid_{issues} \times 2)$$
 
 If `balance < 0`, your weight becomes **0** (penalized).
 
@@ -214,13 +214,13 @@ If they get 2 more valid issues:
 ```
 Miner has 3 valid issues but 8 invalid issues:
   Valid Points: 3
-  Penalty Points: 8 × 0.5 = 4
-  Net Points: 3 - 4 = -1 (negative)
+  Penalty Points: 8 × 2 = 16
+  Net Points: 3 - 16 = -13 (negative)
   Weight: 0 (penalized)
 
-To recover, they need 3 more valid issues:
-  Net Points: 6 - 4 = 2 (positive)
-  Weight: 2 × 0.02 = 0.04 (4%)
+To recover, they need 14 more valid issues:
+  Net Points: 17 - 16 = 1 (positive)
+  Weight: 1 × 0.02 = 0.02 (2%)
 ```
 
 ---
@@ -235,7 +235,7 @@ To recover, they need 3 more valid issues:
 | `weight_per_point` | 0.02 | Weight earned per point |
 | `valid_label` | "valid" | Required label for rewards |
 | `star_bonus_per_repo` | 0.25 | Points per starred repo |
-| `invalid_penalty` | 0.5 | Points deducted per invalid |
+| `invalid_penalty` | 2 | Points deducted per invalid |
 | `min_valid_for_stars` | 2 | Min valid issues for star bonus |
 
 ### Configuration File
@@ -257,7 +257,7 @@ valid_label = "valid"
 flowchart LR
     A["Valid Issue"] --> B["+1 Point"]
     C["Star Repo"] --> D["+0.25 Points"]
-    E["Invalid Issue"] --> F["-0.5 Points"]
+    E["Invalid Issue"] --> F["-2 Points"]
     B --> G["Total Points"]
     D --> G
     F --> G

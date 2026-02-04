@@ -101,13 +101,13 @@ See [Scoring Documentation](docs/reference/scoring.md) for complete specificatio
 
 | Rule | Description |
 |------|-------------|
-| **Penalty** | -0.5 points per invalid issue |
+| **Penalty** | -2 points per invalid issue |
 | **Zero Weight** | If net points < 0, weight = 0 |
 | **Recovery** | Submit valid issues to restore positive balance |
 
 **Formula:**
 ```
-net_points = valid_issues - (invalid_issues × 0.5)
+net_points = valid_issues - (invalid_issues × 2)
 weight = net_points > 0 ? (net_points × 0.02) : 0
 ```
 
@@ -115,8 +115,8 @@ weight = net_points > 0 ? (net_points × 0.02) : 0
 
 | Miner | Valid | Invalid | Net Points | Weight |
 |-------|-------|---------|------------|--------|
-| A | 10 | 2 | 9 | 18% |
-| B | 3 | 8 | -1 | 0% (penalized) |
+| A | 10 | 2 | 6 | 12% |
+| B | 3 | 8 | -13 | 0% (penalized) |
 
 ### Star Bonus
 
