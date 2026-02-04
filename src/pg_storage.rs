@@ -283,6 +283,53 @@ impl PgStorage {
             info!("Applied migration 009_admin_bonus");
         }
 
+        // Check for cleanup false invalids migration (version 10)
+        let has_cleanup_invalids: bool = client
+            .query_one(
+                "SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version = 10)",
+                &[],
+            )
+            .await?
+            .get(0);
+
+        if !has_cleanup_invalids {
+            let migration_sql = include_str!("../migrations/010_cleanup_false_invalids.sql");
+            client.batch_execute(migration_sql).await?;
+            info!("Applied migration 010_cleanup_false_invalids");
+        }
+
+        // Check for fix negative weight migration (version 11)
+        let has_fix_negative: bool = client
+            .query_one(
+                "SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version = 11)",
+                &[],
+            )
+            .await?
+            .get(0);
+
+        if !has_fix_negative {
+            let migration_sql = include_str!("../migrations/011_fix_negative_weight.sql");
+            client.batch_execute(migration_sql).await?;
+            info!("Applied migration 011_fix_negative_weight");
+        }
+
+        // Check for remove weight cap migration (version 12)
+        // This is CRITICAL: ensures users with more points always have higher weight
+        // Without this, users with 54 points and 50 points both get capped at 1.0
+        let has_remove_cap: bool = client
+            .query_one(
+                "SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version = 12)",
+                &[],
+            )
+            .await?
+            .get(0);
+
+        if !has_remove_cap {
+            let migration_sql = include_str!("../migrations/012_remove_weight_cap.sql");
+            client.batch_execute(migration_sql).await?;
+            info!("Applied migration 012_remove_weight_cap");
+        }
+
         Ok(())
     }
 
@@ -571,7 +618,7 @@ impl PgStorage {
     /// Points system:
     /// - 1 point per resolved issue (flat rate)
     /// - 0.25 points per starred repo
-    /// - 100 points = 100% weight
+    /// - Raw weight = points * 0.02 (normalized at API level)
     /// - Negative net points = 0% weight
     pub async fn calculate_user_weight(&self, hotkey: &str) -> Result<f64> {
         let client = self.pool.get().await?;
@@ -611,8 +658,8 @@ impl PgStorage {
             return Ok(0.0);
         }
 
-        // Calculate weight: points * 0.02, capped at 1.0 (100%)
-        let weight = (net_points * WEIGHT_PER_POINT).min(1.0);
+        // Calculate weight: points * 0.02 (raw weight, normalized at API level)
+        let weight = net_points * WEIGHT_PER_POINT;
         Ok(weight)
     }
 
@@ -1986,11 +2033,11 @@ pub struct StarStats {
 /// Points system:
 /// - 1 point per resolved issue (flat rate)
 /// - 0.25 points per starred repo
-/// - 100 points = 100% weight (capped)
+/// - Raw weight = points * 0.02 (normalized at API level)
 ///
-/// Formula: weight = min(points * 0.02, 1.0)
+/// Formula: weight = points * 0.02
 pub fn calculate_weight_from_points(points: f64) -> f64 {
-    (points * WEIGHT_PER_POINT).min(1.0)
+    points * WEIGHT_PER_POINT
 }
 
 // ============================================================================
@@ -2040,7 +2087,7 @@ mod tests {
         let issue_points = 7.0;
         assert!((calculate_weight_from_points(issue_points) - 0.14).abs() < 0.0001);
 
-        // 50 issues = 50 points = 100% (capped)
+        // 50 issues = 50 points = 100% (no cap)
         let issue_points = 50.0;
         assert!((calculate_weight_from_points(issue_points) - 1.0).abs() < 0.0001);
     }
@@ -2057,9 +2104,12 @@ mod tests {
     }
 
     #[test]
-    fn test_weight_from_points_max_cap() {
-        // 100 points should still be capped at 100%
-        assert!((calculate_weight_from_points(100.0) - 1.0).abs() < 0.0001);
+    fn test_weight_from_points_no_cap() {
+        // 100 points should return 2.0 (no cap)
+        assert!((calculate_weight_from_points(100.0) - 2.0).abs() < 0.0001);
+
+        // 54 points should return 1.08 (no cap)
+        assert!((calculate_weight_from_points(54.0) - 1.08).abs() < 0.0001);
     }
 
     #[test]

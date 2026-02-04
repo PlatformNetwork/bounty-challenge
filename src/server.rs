@@ -187,8 +187,9 @@ async fn get_weights_handler(
     };
 
     // Convert to WeightEntry with normalization
-    // Each user's raw weight = their points * 0.02, capped at 1.0 per user
+    // Each user's raw weight = their points * 0.02 (NO CAP - proportional to points)
     // Points: 1 per issue + 0.25 per starred repo
+    // This ensures users with more points always have proportionally higher weight
     let mut weights: Vec<WeightEntry> = current_weights
         .iter()
         .filter(|w| w.weight > 0.0 && !w.is_penalized) // Exclude zero weight and penalized users
