@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 use tower_http::cors::CorsLayer;
 use tracing::{error, info};
 
+use crate::auth::is_valid_ss58_hotkey;
 use crate::challenge::BountyChallenge;
 use crate::pg_storage::PgStorage;
 use platform_challenge_sdk::server::{
@@ -622,8 +623,26 @@ async fn issues_stats_handler(State(state): State<Arc<AppState>>) -> Json<serde_
 
 async fn hotkey_details_handler(
     State(state): State<Arc<AppState>>,
-    Path(hotkey): Path<String>,
+    Path(identifier): Path<String>,
 ) -> Json<serde_json::Value> {
+    // Resolve identifier to hotkey: either it's already a valid SS58 hotkey,
+    // or it's a GitHub username that we need to look up
+    let hotkey = if is_valid_ss58_hotkey(&identifier) {
+        identifier
+    } else {
+        // Try to look up as GitHub username
+        match state.storage.get_hotkey_by_github(&identifier).await {
+            Ok(Some(resolved_hotkey)) => resolved_hotkey,
+            Ok(None) => {
+                return Json(serde_json::json!({ "error": "Hotkey not found" }));
+            }
+            Err(e) => {
+                error!("Failed to look up GitHub username '{}': {}", identifier, e);
+                return Json(serde_json::json!({ "error": "Failed to retrieve hotkey details" }));
+            }
+        }
+    };
+
     match state.storage.get_hotkey_details(&hotkey).await {
         Ok(Some(details)) => match serde_json::to_value(details) {
             Ok(value) => Json(value),
