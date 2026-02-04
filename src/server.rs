@@ -185,22 +185,26 @@ async fn get_weights_handler(
         }
     };
 
-    // Convert to WeightEntry - NO NORMALIZATION
-    // Each user's weight = their points * 0.01, capped at 1.0 per user
+    // Convert to WeightEntry with normalization
+    // Each user's raw weight = their points * 0.02, capped at 1.0 per user
     // Points: 1 per issue + 0.25 per starred repo
-    // 100 total points globally = weights can sum to 1.0
-    // If total < 1.0, remainder goes to burn (handled by validator)
     let mut weights: Vec<WeightEntry> = current_weights
         .iter()
         .filter(|w| w.weight > 0.0 && !w.is_penalized) // Exclude zero weight and penalized users
         .map(|w| WeightEntry {
             hotkey: w.hotkey.clone(),
-            weight: w.weight, // Already capped at 1.0 per user in DB
+            weight: w.weight, // Raw weight before normalization
         })
         .collect();
 
-    // DO NOT normalize - weights represent actual earned percentage
-    // Total may be < 1.0 if not enough global activity (remainder = burn)
+    // Normalize weights so they sum to exactly 1.0
+    // This ensures proper distribution even when total weights exceed 1.0
+    let total_weight: f64 = weights.iter().map(|w| w.weight).sum();
+    if total_weight > 0.0 {
+        for w in &mut weights {
+            w.weight /= total_weight;
+        }
+    }
 
     // Sort by weight descending
     weights.sort_by(|a, b| {
