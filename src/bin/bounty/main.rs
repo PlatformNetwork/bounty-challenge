@@ -8,7 +8,83 @@ mod style;
 mod wizard;
 
 use clap::{Parser, Subcommand};
+use std::net::IpAddr;
 use style::*;
+
+/// Validates that a string is a valid hostname or IP address for server binding.
+///
+/// Rejects:
+/// - URLs (containing "://")
+/// - Hostnames with ports embedded (containing ":")
+/// - Invalid characters for hostnames
+///
+/// Accepts:
+/// - Valid IPv4 addresses (e.g., "0.0.0.0", "127.0.0.1")
+/// - Valid IPv6 addresses (e.g., "::1", "::0")
+/// - Valid hostnames (e.g., "localhost", "my-server.local")
+fn validate_server_host(s: &str) -> Result<String, String> {
+    let s = s.trim();
+
+    // Reject URLs
+    if s.contains("://") {
+        return Err(format!(
+            "Invalid host '{}': URLs are not allowed. Use a hostname or IP address (e.g., '0.0.0.0', 'localhost').",
+            s
+        ));
+    }
+
+    // Reject embedded ports
+    // Note: IPv6 addresses contain colons but are enclosed in brackets when ports are added
+    if s.contains(':') && !s.parse::<IpAddr>().is_ok() {
+        return Err(format!(
+            "Invalid host '{}': Ports should be specified separately with --port. Use just the hostname or IP.",
+            s
+        ));
+    }
+
+    // Try parsing as IP address first
+    if s.parse::<IpAddr>().is_ok() {
+        return Ok(s.to_string());
+    }
+
+    // Validate as hostname per RFC 1123
+    // - Labels separated by dots
+    // - Each label: 1-63 chars, alphanumeric or hyphen, cannot start/end with hyphen
+    // - Total length: max 253 characters
+    if s.len() > 253 {
+        return Err(format!(
+            "Invalid host '{}': Hostname exceeds maximum length of 253 characters.",
+            s
+        ));
+    }
+
+    if s.is_empty() {
+        return Err("Invalid host: Hostname cannot be empty.".to_string());
+    }
+
+    for label in s.split('.') {
+        if label.is_empty() || label.len() > 63 {
+            return Err(format!(
+                "Invalid host '{}': Each hostname label must be 1-63 characters.",
+                s
+            ));
+        }
+        if label.starts_with('-') || label.ends_with('-') {
+            return Err(format!(
+                "Invalid host '{}': Hostname labels cannot start or end with a hyphen.",
+                s
+            ));
+        }
+        if !label.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+            return Err(format!(
+                "Invalid host '{}': Hostname contains invalid characters. Use only letters, numbers, and hyphens.",
+                s
+            ));
+        }
+    }
+
+    Ok(s.to_string())
+}
 
 const BANNER: &str = r#"
   ██████╗  ██████╗ ██╗   ██╗███╗   ██╗████████╗██╗   ██╗
@@ -55,8 +131,8 @@ enum Commands {
     /// Run as server (for subnet operators)
     #[command(visible_alias = "s")]
     Server {
-        /// Host to bind
-        #[arg(long, env = "CHALLENGE_HOST", default_value = "0.0.0.0")]
+        /// Host to bind (hostname or IP address, e.g., "0.0.0.0", "localhost")
+        #[arg(long, env = "CHALLENGE_HOST", default_value = "0.0.0.0", value_parser = validate_server_host)]
         host: String,
 
         /// Port to listen on
