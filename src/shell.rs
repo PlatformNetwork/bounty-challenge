@@ -137,7 +137,7 @@ pub mod bash {
         if name.is_empty() {
             return false;
         }
-        let first = name.chars().next().expect("name is non-empty (checked above)");
+        let first = name.chars().next().unwrap_or_default();
         if !first.is_alphabetic() && first != '_' {
             return false;
         }
@@ -350,6 +350,31 @@ pub mod powershell {
         result
     }
 
+    /// Returns true if the character could continue a PowerShell variable name.
+    /// Used to decide whether a replacement like `$PID` needs bracing to
+    /// prevent merging with subsequent text (e.g., `${PID}` instead of `$PID`
+    /// when followed by identifier characters).
+    fn is_ps_identifier_char(c: char) -> bool {
+        c.is_alphanumeric() || c == '_'
+    }
+
+    /// Emit a PowerShell variable replacement, using the braced form
+    /// `${name}` when the next character in the input could merge with the
+    /// variable name, and the plain form `$name` otherwise.
+    fn emit_ps_var(
+        result: &mut String,
+        var_name: &str,
+        chars: &[char],
+        pos: usize,
+    ) {
+        let needs_brace = pos < chars.len() && is_ps_identifier_char(chars[pos]);
+        if needs_brace {
+            result.push_str(&format!("${{{}}}", var_name));
+        } else {
+            result.push_str(&format!("${}", var_name));
+        }
+    }
+
     /// Context-aware conversion of dollar-sign expressions from bash to PowerShell.
     ///
     /// Walks through the string character by character and determines the
@@ -433,15 +458,15 @@ pub mod powershell {
 
                     // $? -- last exit status -> $LASTEXITCODE in PowerShell
                     '?' => {
-                        result.push_str("$LASTEXITCODE");
                         i += 2;
+                        emit_ps_var(&mut result, "LASTEXITCODE", &chars, i);
                         continue;
                     }
 
                     // $$ -- current process ID -> $PID in PowerShell
                     '$' => {
-                        result.push_str("$PID");
                         i += 2;
+                        emit_ps_var(&mut result, "PID", &chars, i);
                         continue;
                     }
 
@@ -454,26 +479,42 @@ pub mod powershell {
 
                     // $# -- number of positional parameters -> $args.Count
                     '#' => {
-                        result.push_str("$args.Count");
+                        // $args.Count ends with an alpha char; if followed by
+                        // more identifier chars we need the braced form.
                         i += 2;
+                        let needs_brace = i < len && is_ps_identifier_char(chars[i]);
+                        if needs_brace {
+                            result.push_str("${args}.Count");
+                        } else {
+                            result.push_str("$args.Count");
+                        }
                         continue;
                     }
 
                     // $@ or $* -- all positional parameters -> $args
                     '@' | '*' => {
-                        result.push_str("$args");
                         i += 2;
+                        emit_ps_var(&mut result, "args", &chars, i);
                         continue;
                     }
 
                     // $0-$9 -- positional parameters -> $args[N-1] (or $MyInvocation for $0)
                     d if d.is_ascii_digit() => {
+                        i += 2;
                         if d == '0' {
-                            result.push_str("$MyInvocation.MyCommand.Name");
+                            // $MyInvocation.MyCommand.Name ends with 'e';
+                            // brace it if followed by identifier chars.
+                            let needs_brace = i < len && is_ps_identifier_char(chars[i]);
+                            if needs_brace {
+                                result.push_str("${MyInvocation}.MyCommand.Name");
+                            } else {
+                                result.push_str("$MyInvocation.MyCommand.Name");
+                            }
                         } else {
+                            // $args[N] ends with ']', which is not an
+                            // identifier char, so no bracing needed.
                             result.push_str(&format!("$args[{}]", (d as u8 - b'1')));
                         }
-                        i += 2;
                         continue;
                     }
 
@@ -579,7 +620,15 @@ pub mod powershell {
     }
 
     /// Convert a PowerShell command to bash equivalent.
+    ///
+    /// Uses a HashMap of PowerShell-to-bash command mappings, sorted by
+    /// length (longest first) so that multi-word commands like
+    /// "Remove-Item -Recurse" are matched before shorter prefixes like
+    /// "Remove-Item".  Replacements are quote-aware: content inside
+    /// single or double quotes is never modified.
     pub fn to_bash(ps_cmd: &str) -> String {
+        use std::collections::HashMap;
+
         let mut result = ps_cmd.to_string();
 
         // Convert PowerShell environment variables to bash
@@ -606,22 +655,55 @@ pub mod powershell {
             } else {
                 // Safe: $env: prefix is ASCII, so non-prefix bytes keep
                 // their original encoding.  We re-derive the char properly.
-                let ch = result[i..].chars().next().expect("i is within bounds of result");
+                let ch = result[i..].chars().next().unwrap_or_default();
                 new_result.push(ch);
                 i += ch.len_utf8();
             }
         }
         result = new_result;
 
-        // Convert PowerShell commands back to bash
-        result = result.replace("Write-Output", "echo");
-        result = result.replace("Get-Content", "cat");
-        result = result.replace("Get-ChildItem", "ls");
-        result = result.replace("Copy-Item", "cp");
-        result = result.replace("Move-Item", "mv");
-        result = result.replace("Remove-Item", "rm");
-        result = result.replace("Get-Location", "pwd");
-        result = result.replace("Set-Location", "cd");
+        // Build a HashMap of PowerShell commands to their bash equivalents.
+        let mut cmd_map: HashMap<&str, &str> = HashMap::new();
+        cmd_map.insert("Write-Output", "echo");
+        cmd_map.insert("Get-Content", "cat");
+        cmd_map.insert("Get-ChildItem -Recurse", "find");
+        cmd_map.insert("Get-ChildItem", "ls");
+        cmd_map.insert("Copy-Item", "cp");
+        cmd_map.insert("Move-Item", "mv");
+        cmd_map.insert("Remove-Item -Recurse", "rmdir");
+        cmd_map.insert("Remove-Item", "rm");
+        cmd_map.insert("New-Item -ItemType Directory -Path", "mkdir");
+        cmd_map.insert("Get-Location", "pwd");
+        cmd_map.insert("Set-Location", "cd");
+        cmd_map.insert("Select-String", "grep");
+        cmd_map.insert("Sort-Object", "sort");
+        cmd_map.insert("Select-Object -First", "head");
+        cmd_map.insert("Select-Object -Last", "tail");
+        cmd_map.insert("Measure-Object", "wc");
+        cmd_map.insert("New-Item -ItemType File -Path", "touch");
+        cmd_map.insert("Get-Command", "which");
+        cmd_map.insert("Get-Date", "date");
+        cmd_map.insert("Start-Sleep -Seconds", "sleep");
+        cmd_map.insert("Stop-Process -Id", "kill");
+        cmd_map.insert("Get-Process", "ps");
+        cmd_map.insert("Get-ChildItem Env:", "env");
+        cmd_map.insert("Invoke-WebRequest -OutFile", "wget");
+        cmd_map.insert("Invoke-WebRequest", "curl");
+        cmd_map.insert("Compress-Archive", "zip");
+        cmd_map.insert("Expand-Archive", "unzip");
+        cmd_map.insert("Compare-Object", "diff");
+        cmd_map.insert("Tee-Object", "tee");
+
+        // Sort by key length descending so longer patterns match first.
+        // This prevents "Remove-Item" from matching before
+        // "Remove-Item -Recurse".
+        let mut sorted_cmds: Vec<(&str, &str)> = cmd_map.into_iter().collect();
+        sorted_cmds.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
+
+        // Apply each replacement outside of quotes only
+        for (ps_name, bash_name) in &sorted_cmds {
+            result = replace_outside_quotes(&result, ps_name, bash_name);
+        }
 
         // Convert special variables with word-boundary awareness.
         // A simple `replace("$PID", "$$")` would corrupt longer
@@ -1235,6 +1317,119 @@ mod tests {
         assert!(
             result.contains("*>&1"),
             "2>&1 should become *>&1 (longest match first), got: {}",
+            result
+        );
+    }
+
+    // ===== Round 4 fix: special variable replacements must not merge with subsequent text =====
+
+    #[test]
+    fn test_from_bash_double_dollar_followed_by_identifier() {
+        // $$something in bash is PID followed by literal "something".
+        // The PowerShell output must use braced form to prevent merging.
+        let result = powershell::from_bash("echo $$something");
+        assert!(
+            !result.contains("$PIDsomething"),
+            "$$something must NOT become $PIDsomething, got: {}",
+            result
+        );
+        assert!(
+            result.contains("${PID}something"),
+            "$$something should become ${{PID}}something, got: {}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_from_bash_exit_code_followed_by_identifier() {
+        // $?foo in bash is exit code followed by literal "foo".
+        let result = powershell::from_bash("echo $?foo");
+        assert!(
+            !result.contains("$LASTEXITCODEfoo"),
+            "$?foo must NOT become $LASTEXITCODEfoo, got: {}",
+            result
+        );
+        assert!(
+            result.contains("${LASTEXITCODE}foo"),
+            "$?foo should become ${{LASTEXITCODE}}foo, got: {}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_from_bash_args_count_followed_by_identifier() {
+        // $#x in bash is arg count followed by literal "x".
+        let result = powershell::from_bash("echo $#x");
+        assert!(
+            !result.contains("$args.Countx"),
+            "$#x must NOT become $args.Countx, got: {}",
+            result
+        );
+        // Should use ${args}.Countx to prevent merging
+        assert!(
+            result.contains("${args}.Count"),
+            "$#x should use braced form, got: {}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_from_bash_at_followed_by_identifier() {
+        // $@foo in bash is $@ followed by literal "foo".
+        let result = powershell::from_bash("echo $@foo");
+        assert!(
+            !result.contains("$argsfoo"),
+            "$@foo must NOT become $argsfoo, got: {}",
+            result
+        );
+        assert!(
+            result.contains("${args}foo"),
+            "$@foo should become ${{args}}foo, got: {}",
+            result
+        );
+    }
+
+    // ===== Round 4 fix: to_bash command replacements are quote-aware and order-independent =====
+
+    #[test]
+    fn test_to_bash_remove_item_recurse() {
+        // "Remove-Item -Recurse" should become "rmdir", not "rm -Recurse"
+        let result = powershell::to_bash("Remove-Item -Recurse ./folder");
+        assert!(
+            result.contains("rmdir"),
+            "Remove-Item -Recurse should become rmdir, got: {}",
+            result
+        );
+        assert!(
+            !result.contains("rm -Recurse"),
+            "Remove-Item -Recurse should NOT become rm -Recurse, got: {}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_to_bash_command_inside_quotes_preserved() {
+        // Command names inside quoted strings should not be replaced
+        let result = powershell::to_bash("Write-Output \"Get-Content is a cmdlet\"");
+        assert!(
+            result.contains("\"Get-Content is a cmdlet\""),
+            "Get-Content inside quotes should not be replaced, got: {}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_to_bash_get_childitem_recurse() {
+        // "Get-ChildItem -Recurse" should become "find", not "ls -Recurse"
+        let result = powershell::to_bash("Get-ChildItem -Recurse .");
+        assert!(
+            result.contains("find"),
+            "Get-ChildItem -Recurse should become find, got: {}",
+            result
+        );
+        assert!(
+            !result.contains("ls -Recurse"),
+            "Get-ChildItem -Recurse should NOT become ls -Recurse, got: {}",
             result
         );
     }
