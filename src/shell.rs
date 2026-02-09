@@ -331,11 +331,17 @@ pub mod powershell {
 
         // Step 2: Convert bash operators to PowerShell equivalents
         // Only replace operators outside of quoted strings.
+        // Sort operators by length descending so longer operators (e.g. "2>&1")
+        // are matched before shorter prefixes (e.g. ">"), ensuring deterministic
+        // and correct replacement regardless of HashMap iteration order.
         let op_map = command_map::bash_operators_to_powershell();
-        for (bash_op, ps_op) in &op_map {
-            if *bash_op != "|" && bash_op != ps_op {
-                result = replace_outside_quotes(&result, bash_op, ps_op);
-            }
+        let mut ops: Vec<(&&str, &&str)> = op_map
+            .iter()
+            .filter(|(bash_op, ps_op)| **bash_op != "|" && bash_op != ps_op)
+            .collect();
+        ops.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
+        for (bash_op, ps_op) in ops {
+            result = replace_outside_quotes(&result, bash_op, ps_op);
         }
 
         // Step 3: Convert environment variables with context awareness
@@ -479,8 +485,11 @@ pub mod powershell {
                     }
 
                     // $_ -- common in bash (though rare) and also valid in PS
-                    // Guard: either at end of string or next char is not alphanumeric
-                    '_' if i + 2 >= len || !chars[i + 2].is_alphanumeric() => {
+                    // Guard: either at end of string or next char is not an
+                    // identifier continuation character (alphanumeric or '_').
+                    // This ensures $__ and $__foo fall through to the $VARNAME
+                    // arm and are converted to $env:__ / $env:__foo.
+                    '_' if i + 2 >= len || !(chars[i + 2].is_alphanumeric() || chars[i + 2] == '_') => {
                         result.push_str("$_");
                         i += 2;
                         continue;
@@ -523,6 +532,9 @@ pub mod powershell {
     /// Replace occurrences of `from` with `to` only when they appear outside of
     /// single-quoted or double-quoted strings.  This prevents operator
     /// replacement from corrupting string literals like `"a && b"`.
+    ///
+    /// Handles backslash-escaped quotes (`\"` and `\'`) so that escaped
+    /// quotes inside strings do not toggle the quote-tracking state.
     fn replace_outside_quotes(input: &str, from: &str, to: &str) -> String {
         let mut result = String::with_capacity(input.len() + 32);
         let mut in_single_quote = false;
@@ -535,6 +547,15 @@ pub mod powershell {
 
         while i < len {
             let c = chars[i];
+
+            // Handle backslash escapes: skip the next character so that
+            // escaped quotes (\" or \') don't toggle quote state.
+            if c == '\\' && i + 1 < len {
+                result.push(c);
+                result.push(chars[i + 1]);
+                i += 2;
+                continue;
+            }
 
             if c == '\'' && !in_double_quote {
                 in_single_quote = !in_single_quote;
@@ -1122,6 +1143,91 @@ mod tests {
         assert!(
             map.get("test").is_none(),
             "test should not be mapped to any PowerShell command"
+        );
+    }
+
+    // ===== Round 3 fix: $__ and $__foo should be regular variables =====
+
+    #[test]
+    fn test_from_bash_double_underscore_variable() {
+        // $__ is a regular variable (not the special $_), should become $env:__
+        let result = powershell::from_bash("echo $__");
+        assert!(
+            result.contains("$env:__"),
+            "$__ should become $env:__, got: {}",
+            result
+        );
+        assert!(
+            !result.contains("$_ ") && !result.ends_with("$_"),
+            "$__ should NOT be split into $_ + literal _, got: {}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_from_bash_double_underscore_prefixed_variable() {
+        // $__foo is a regular variable, should become $env:__foo
+        let result = powershell::from_bash("echo $__foo");
+        assert!(
+            result.contains("$env:__foo"),
+            "$__foo should become $env:__foo, got: {}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_from_bash_underscore_then_alphanumeric() {
+        // $_x is a regular variable, should become $env:_x
+        let result = powershell::from_bash("echo $_x");
+        assert!(
+            result.contains("$env:_x"),
+            "$_x should become $env:_x, got: {}",
+            result
+        );
+    }
+
+    // ===== Round 3 fix: escaped quotes inside strings =====
+
+    #[test]
+    fn test_from_bash_escaped_quote_in_double_string() {
+        // Escaped quotes inside a double-quoted string should not break
+        // quote tracking. The 2>&1 is inside the string and must NOT be replaced.
+        let result = powershell::from_bash("echo \"she said \\\"hello\\\"\" 2>&1");
+        // The 2>&1 outside the string should be replaced with *>&1
+        assert!(
+            result.contains("*>&1"),
+            "2>&1 outside quotes should become *>&1, got: {}",
+            result
+        );
+        // The quoted portion should be intact
+        assert!(
+            result.contains("\\\"hello\\\""),
+            "Escaped quotes inside double-quoted string should be preserved, got: {}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_from_bash_operator_after_escaped_quote_string() {
+        // Ensure operators after a string with escaped quotes are still replaced
+        let result = powershell::from_bash("echo \"path\\\"with\\\"quotes\" 2>&1");
+        assert!(
+            result.contains("*>&1"),
+            "2>&1 after escaped-quote string should become *>&1, got: {}",
+            result
+        );
+    }
+
+    // ===== Round 3 fix: operator sorting is deterministic =====
+
+    #[test]
+    fn test_from_bash_redirect_stderr_preserved_over_simple_redirect() {
+        // 2>&1 should be matched as a whole before > is matched
+        let result = powershell::from_bash("cmd 2>&1");
+        assert!(
+            result.contains("*>&1"),
+            "2>&1 should become *>&1 (longest match first), got: {}",
+            result
         );
     }
 }
