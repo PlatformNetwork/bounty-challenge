@@ -137,7 +137,7 @@ pub mod bash {
         if name.is_empty() {
             return false;
         }
-        let first = name.chars().next().unwrap();
+        let first = name.chars().next().expect("name is non-empty (checked above)");
         if !first.is_alphabetic() && first != '_' {
             return false;
         }
@@ -145,6 +145,10 @@ pub mod bash {
     }
 
     /// Extract environment variable references from a bash command string.
+    ///
+    /// Uses a `Vec<char>` to iterate by character index, avoiding the
+    /// byte-index-vs-char-index mismatch that would panic on non-ASCII
+    /// input if we sliced the original `&str` with char-derived offsets.
     pub fn extract_env_vars(cmd: &str) -> Vec<String> {
         let mut vars = Vec::new();
         let chars: Vec<char> = cmd.chars().collect();
@@ -154,18 +158,21 @@ pub mod bash {
             if chars[i] == '$' && i + 1 < chars.len() {
                 let next = chars[i + 1];
                 if next == '{' {
-                    // ${VAR} form
-                    if let Some(end) = cmd[i + 2..].find('}') {
-                        let var_name = &cmd[i + 2..i + 2 + end];
+                    // ${VAR} form -- find the closing '}' by scanning chars
+                    if let Some(close_offset) =
+                        chars[i + 2..].iter().position(|&ch| ch == '}')
+                    {
+                        let var_name: String =
+                            chars[i + 2..i + 2 + close_offset].iter().collect();
                         // Strip any parameter expansion operators
-                        let var_name = var_name
+                        let base_var = var_name
                             .split(|c: char| c == ':' || c == '-' || c == '+' || c == '=')
                             .next()
-                            .unwrap_or(var_name);
-                        if is_valid_var_name(var_name) {
-                            vars.push(var_name.to_string());
+                            .unwrap_or(&var_name);
+                        if is_valid_var_name(base_var) {
+                            vars.push(base_var.to_string());
                         }
-                        i += 3 + end;
+                        i += 3 + close_offset;
                         continue;
                     }
                 } else if next.is_alphabetic() || next == '_' {
@@ -228,14 +235,21 @@ pub mod command_map {
         map.insert("unset", "Remove-Item Env:");
         map.insert("curl", "Invoke-WebRequest");
         map.insert("wget", "Invoke-WebRequest -OutFile");
-        map.insert("tar", "Expand-Archive");
+        // Note: bash `tar` handles tarballs (.tar, .tar.gz, etc.), not zip
+        // archives. There is no single PowerShell cmdlet equivalent, so we
+        // invoke the tar executable directly (available on Windows 10+).
+        map.insert("tar", "tar");
         map.insert("zip", "Compress-Archive");
         map.insert("unzip", "Expand-Archive");
         map.insert("diff", "Compare-Object");
         map.insert("tee", "Tee-Object");
         map.insert("true", "$true");
         map.insert("false", "$false");
-        map.insert("test", "Test-Path");
+        // Note: bash `test` (aka `[`) supports file tests, string
+        // comparisons, and arithmetic checks. `Test-Path` only covers
+        // the file-existence subset, so we leave it unmapped to avoid
+        // silently changing semantics.
+        // map.insert("test", "Test-Path");
         map
     }
 
@@ -365,6 +379,15 @@ pub mod powershell {
             if in_single_quote {
                 result.push(c);
                 i += 1;
+                continue;
+            }
+
+            // Handle backslash-escaped dollar signs: in bash, \$VAR
+            // prevents variable expansion and produces a literal $.
+            // We emit the literal '$' and skip the backslash.
+            if c == '\\' && i + 1 < len && chars[i + 1] == '$' {
+                result.push('$');
+                i += 2;
                 continue;
             }
 
@@ -569,7 +592,7 @@ pub mod powershell {
             } else {
                 // Safe: $env: prefix is ASCII, so non-prefix bytes keep
                 // their original encoding.  We re-derive the char properly.
-                let ch = result[i..].chars().next().unwrap();
+                let ch = result[i..].chars().next().expect("i is within bounds of result");
                 new_result.push(ch);
                 i += ch.len_utf8();
             }
@@ -586,10 +609,42 @@ pub mod powershell {
         result = result.replace("Get-Location", "pwd");
         result = result.replace("Set-Location", "cd");
 
-        // Convert special variables
-        result = result.replace("$LASTEXITCODE", "$?");
-        result = result.replace("$PID", "$$");
+        // Convert special variables with word-boundary awareness.
+        // A simple `replace("$PID", "$$")` would corrupt longer
+        // variable names like `$PIDFILE`.
+        result = replace_ps_variable(&result, "$LASTEXITCODE", "$?");
+        result = replace_ps_variable(&result, "$PID", "$$");
 
+        result
+    }
+
+    /// Replace a PowerShell variable name with its bash equivalent,
+    /// only when the match is not followed by an identifier character
+    /// (alphanumeric or underscore). This prevents `$PID` from matching
+    /// inside `$PIDFILE`.
+    fn replace_ps_variable(input: &str, from: &str, to: &str) -> String {
+        let mut result = String::with_capacity(input.len());
+        let mut remaining = input;
+
+        while let Some(pos) = remaining.find(from) {
+            result.push_str(&remaining[..pos]);
+            let after = pos + from.len();
+            // Check if the character after the match continues the
+            // variable name (alphanumeric or underscore). If so, this
+            // is not a standalone variable -- keep the original text.
+            let is_word_boundary = remaining
+                .get(after..)
+                .and_then(|s| s.chars().next())
+                .map_or(true, |ch| !ch.is_alphanumeric() && ch != '_');
+
+            if is_word_boundary {
+                result.push_str(to);
+            } else {
+                result.push_str(from);
+            }
+            remaining = &remaining[after..];
+        }
+        result.push_str(remaining);
         result
     }
 }
@@ -991,6 +1046,82 @@ mod tests {
             map.get("||"),
             Some(&"||"),
             "|| should map to || for PowerShell 7+"
+        );
+    }
+
+    // ===== Review fix: backslash-escaped \$ should be literal =====
+
+    #[test]
+    fn test_from_bash_escaped_dollar_sign() {
+        // In bash, \$HOME prevents expansion and produces literal $HOME
+        let result = powershell::from_bash("echo \\$HOME");
+        assert!(
+            !result.contains("$env:HOME"),
+            "\\$HOME should NOT be converted to $env:HOME, got: {}",
+            result
+        );
+        assert!(
+            result.contains("$HOME"),
+            "\\$HOME should produce literal $HOME, got: {}",
+            result
+        );
+    }
+
+    // ===== Review fix: extract_env_vars with non-ASCII input =====
+
+    #[test]
+    fn test_extract_env_vars_non_ascii() {
+        // Non-ASCII characters before the $ should not cause a panic
+        let vars = bash::extract_env_vars("\u{1F600} $HOME and \u{00E9}${PATH}");
+        assert!(vars.contains(&"HOME".to_string()));
+        assert!(vars.contains(&"PATH".to_string()));
+    }
+
+    // ===== Review fix: $PID should not corrupt $PIDFILE in to_bash =====
+
+    #[test]
+    fn test_to_bash_pid_word_boundary() {
+        // $PID alone should become $$
+        let result = powershell::to_bash("echo $PID");
+        assert!(
+            result.contains("$$"),
+            "$PID should become $$, got: {}",
+            result
+        );
+        // $PIDFILE should NOT be corrupted
+        let result2 = powershell::to_bash("echo $PIDFILE");
+        assert!(
+            result2.contains("$PIDFILE"),
+            "$PIDFILE should remain $PIDFILE, got: {}",
+            result2
+        );
+        assert!(
+            !result2.contains("$$FILE"),
+            "$PIDFILE should NOT become $$FILE, got: {}",
+            result2
+        );
+    }
+
+    // ===== Review fix: tar should not map to Expand-Archive =====
+
+    #[test]
+    fn test_command_map_tar_not_expand_archive() {
+        let map = command_map::bash_to_powershell();
+        assert_ne!(
+            map.get("tar"),
+            Some(&"Expand-Archive"),
+            "tar should NOT map to Expand-Archive"
+        );
+    }
+
+    // ===== Review fix: test should not be mapped =====
+
+    #[test]
+    fn test_command_map_test_not_mapped() {
+        let map = command_map::bash_to_powershell();
+        assert!(
+            map.get("test").is_none(),
+            "test should not be mapped to any PowerShell command"
         );
     }
 }
