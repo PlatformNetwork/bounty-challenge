@@ -28,6 +28,7 @@ pub mod github_oauth;
 pub mod metagraph;
 pub mod pg_storage;
 pub mod server;
+pub mod shell;
 
 pub use auth::{is_valid_ss58_hotkey, verify_signature};
 pub use challenge::BountyChallenge;
