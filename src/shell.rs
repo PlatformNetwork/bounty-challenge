@@ -235,21 +235,14 @@ pub mod command_map {
         map.insert("unset", "Remove-Item Env:");
         map.insert("curl", "Invoke-WebRequest");
         map.insert("wget", "Invoke-WebRequest -OutFile");
-        // Note: bash `tar` handles tarballs (.tar, .tar.gz, etc.), not zip
-        // archives. There is no single PowerShell cmdlet equivalent, so we
-        // invoke the tar executable directly (available on Windows 10+).
-        map.insert("tar", "tar");
+        map.insert("tar", "# no direct equivalent: use tar.exe or Expand-Archive for .zip");
         map.insert("zip", "Compress-Archive");
         map.insert("unzip", "Expand-Archive");
         map.insert("diff", "Compare-Object");
         map.insert("tee", "Tee-Object");
         map.insert("true", "$true");
         map.insert("false", "$false");
-        // Note: bash `test` (aka `[`) supports file tests, string
-        // comparisons, and arithmetic checks. `Test-Path` only covers
-        // the file-existence subset, so we leave it unmapped to avoid
-        // silently changing semantics.
-        // map.insert("test", "Test-Path");
+        map.insert("test", "# no direct equivalent: use Test-Path, Test-Connection, or specific comparison operators");
         map
     }
 
@@ -868,7 +861,7 @@ mod tests {
         let result = powershell::from_bash("echo ${HOME}");
         assert!(
             result.contains("$env:HOME"),
-            "${HOME} should become $env:HOME, got: {}",
+            "${{HOME}} should become $env:HOME, got: {}",
             result
         );
     }
@@ -1133,16 +1126,31 @@ mod tests {
             Some(&"Expand-Archive"),
             "tar should NOT map to Expand-Archive"
         );
+        // tar should map to a comment indicating no direct equivalent
+        let tar_val = map.get("tar").expect("tar should be in the map");
+        assert!(
+            tar_val.starts_with("# no direct equivalent"),
+            "tar should map to a comment string, got: {}",
+            tar_val
+        );
     }
 
-    // ===== Review fix: test should not be mapped =====
+    // ===== Review fix: test should map to a comment, not Test-Path =====
 
     #[test]
-    fn test_command_map_test_not_mapped() {
+    fn test_command_map_test_not_test_path() {
         let map = command_map::bash_to_powershell();
+        assert_ne!(
+            map.get("test"),
+            Some(&"Test-Path"),
+            "test should NOT map to Test-Path"
+        );
+        // test should map to a comment indicating no direct equivalent
+        let test_val = map.get("test").expect("test should be in the map");
         assert!(
-            map.get("test").is_none(),
-            "test should not be mapped to any PowerShell command"
+            test_val.starts_with("# no direct equivalent"),
+            "test should map to a comment string, got: {}",
+            test_val
         );
     }
 
