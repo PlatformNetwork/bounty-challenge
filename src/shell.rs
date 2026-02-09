@@ -242,8 +242,8 @@ pub mod command_map {
     /// Returns a mapping of bash operators to PowerShell operators.
     pub fn bash_operators_to_powershell() -> HashMap<&'static str, &'static str> {
         let mut map = HashMap::new();
-        map.insert("&&", ";");
-        map.insert("||", "; if ($LASTEXITCODE -ne 0)");
+        map.insert("&&", "&&"); // PowerShell 7+ supports && natively
+        map.insert("||", "||"); // PowerShell 7+ supports || natively
         map.insert("|", "|");
         map.insert(">", ">"); // same in PS
         map.insert(">>", ">>"); // same in PS
@@ -269,7 +269,7 @@ pub mod powershell {
     /// - Special variable conversion ($? -> $LASTEXITCODE, $$ -> $PID)
     /// - Subshell preservation ($(cmd) is left as-is for PowerShell)
     /// - String literal preservation (dollar signs in single quotes are untouched)
-    /// - Operator translation (&& -> ;, etc.)
+    /// - Operator translation (2>&1 -> *>&1, /dev/null -> $null, etc.)
     ///
     /// # Arguments
     ///
@@ -316,11 +316,11 @@ pub mod powershell {
         }
 
         // Step 2: Convert bash operators to PowerShell equivalents
+        // Only replace operators outside of quoted strings.
         let op_map = command_map::bash_operators_to_powershell();
         for (bash_op, ps_op) in &op_map {
-            if *bash_op != "|" {
-                // Don't replace pipe, it's the same
-                result = result.replace(bash_op, ps_op);
+            if *bash_op != "|" && bash_op != ps_op {
+                result = replace_outside_quotes(&result, bash_op, ps_op);
             }
         }
 
@@ -423,9 +423,9 @@ pub mod powershell {
                         continue;
                     }
 
-                    // $! -- last background process ID -> (Get-Process -Id $PID).Id
+                    // $! -- last background process ID (no direct PowerShell equivalent)
                     '!' => {
-                        result.push_str("$PID"); // closest PS equivalent
+                        result.push_str("<# $! not supported #>");
                         i += 2;
                         continue;
                     }
@@ -456,7 +456,8 @@ pub mod powershell {
                     }
 
                     // $_ -- common in bash (though rare) and also valid in PS
-                    '_' if i + 2 < len && !chars[i + 2].is_alphanumeric() => {
+                    // Guard: either at end of string or next char is not alphanumeric
+                    '_' if i + 2 >= len || !chars[i + 2].is_alphanumeric() => {
                         result.push_str("$_");
                         i += 2;
                         continue;
@@ -496,30 +497,81 @@ pub mod powershell {
         result
     }
 
+    /// Replace occurrences of `from` with `to` only when they appear outside of
+    /// single-quoted or double-quoted strings.  This prevents operator
+    /// replacement from corrupting string literals like `"a && b"`.
+    fn replace_outside_quotes(input: &str, from: &str, to: &str) -> String {
+        let mut result = String::with_capacity(input.len() + 32);
+        let mut in_single_quote = false;
+        let mut in_double_quote = false;
+        let chars: Vec<char> = input.chars().collect();
+        let from_chars: Vec<char> = from.chars().collect();
+        let len = chars.len();
+        let flen = from_chars.len();
+        let mut i = 0;
+
+        while i < len {
+            let c = chars[i];
+
+            if c == '\'' && !in_double_quote {
+                in_single_quote = !in_single_quote;
+                result.push(c);
+                i += 1;
+                continue;
+            }
+            if c == '"' && !in_single_quote {
+                in_double_quote = !in_double_quote;
+                result.push(c);
+                i += 1;
+                continue;
+            }
+
+            if !in_single_quote && !in_double_quote && i + flen <= len {
+                if chars[i..i + flen] == from_chars[..] {
+                    result.push_str(to);
+                    i += flen;
+                    continue;
+                }
+            }
+
+            result.push(c);
+            i += 1;
+        }
+
+        result
+    }
+
     /// Convert a PowerShell command to bash equivalent.
     pub fn to_bash(ps_cmd: &str) -> String {
         let mut result = ps_cmd.to_string();
 
         // Convert PowerShell environment variables to bash
         // $env:VAR -> $VAR
-        let chars: Vec<char> = result.chars().collect();
-        let mut new_result = String::with_capacity(result.len());
-        let mut i = 0;
         let prefix = "$env:";
+        let mut new_result = String::with_capacity(result.len());
+        let bytes = result.as_bytes();
+        let prefix_bytes = prefix.as_bytes();
+        let mut i = 0;
 
-        while i < chars.len() {
-            let remaining: String = chars[i..].iter().collect();
-            if remaining.starts_with(prefix) {
+        while i < bytes.len() {
+            if i + prefix_bytes.len() <= bytes.len()
+                && &bytes[i..i + prefix_bytes.len()] == prefix_bytes
+            {
                 new_result.push('$');
-                i += prefix.len();
-                // Collect the variable name
-                while i < chars.len() && (chars[i].is_alphanumeric() || chars[i] == '_') {
-                    new_result.push(chars[i]);
+                i += prefix_bytes.len();
+                // Collect the variable name (ASCII-safe: alphanumeric and _)
+                while i < bytes.len()
+                    && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_')
+                {
+                    new_result.push(bytes[i] as char);
                     i += 1;
                 }
             } else {
-                new_result.push(chars[i]);
-                i += 1;
+                // Safe: $env: prefix is ASCII, so non-prefix bytes keep
+                // their original encoding.  We re-derive the char properly.
+                let ch = result[i..].chars().next().unwrap();
+                new_result.push(ch);
+                i += ch.len_utf8();
             }
         }
         result = new_result;
@@ -782,6 +834,140 @@ mod tests {
         assert_eq!(result, "$?");
     }
 
+    // ===== Issue #1: && should use PowerShell 7 native && operator =====
+
+    #[test]
+    fn test_from_bash_and_operator_preserved() {
+        // && should remain && for PowerShell 7+ (not become ;)
+        let result = powershell::from_bash("mkdir foo && cd foo");
+        assert!(
+            result.contains("&&"),
+            "&& should be preserved for PowerShell 7+, got: {}",
+            result
+        );
+        assert!(
+            !result.contains("; cd"),
+            "&& should NOT become ;, got: {}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_from_bash_or_operator_preserved() {
+        // || should remain || for PowerShell 7+
+        let result = powershell::from_bash("cmd1 || cmd2");
+        assert!(
+            result.contains("||"),
+            "|| should be preserved for PowerShell 7+, got: {}",
+            result
+        );
+    }
+
+    // ===== Issue #2: Operator replacement should not corrupt quoted strings =====
+
+    #[test]
+    fn test_from_bash_operator_inside_quotes_untouched() {
+        // Operators inside quoted strings must not be replaced
+        let result = powershell::from_bash("echo \"a && b\"");
+        assert!(
+            result.contains("\"a && b\""),
+            "Operators inside double quotes should be untouched, got: {}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_from_bash_operator_inside_single_quotes_untouched() {
+        let result = powershell::from_bash("echo '2>&1'");
+        assert!(
+            result.contains("'2>&1'"),
+            "Operators inside single quotes should be untouched, got: {}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_from_bash_devnull_inside_quotes_untouched() {
+        let result = powershell::from_bash("echo \"/dev/null\"");
+        assert!(
+            result.contains("\"/dev/null\""),
+            "/dev/null inside quotes should be untouched, got: {}",
+            result
+        );
+    }
+
+    // ===== Issue #3: $! should NOT map to $PID =====
+
+    #[test]
+    fn test_from_bash_bang_not_pid() {
+        // $! is last background PID in bash; no direct PS equivalent
+        let result = powershell::from_bash("echo $!");
+        assert!(
+            !result.contains("$PID"),
+            "$! should NOT map to $PID, got: {}",
+            result
+        );
+        assert!(
+            result.contains("<# $! not supported #>"),
+            "$! should map to a placeholder comment, got: {}",
+            result
+        );
+    }
+
+    // ===== Issue #4: $_ at end-of-string should not become $env:_ =====
+
+    #[test]
+    fn test_from_bash_dollar_underscore_end_of_string() {
+        // When $_ is at the end of the string, it should stay as $_
+        let result = powershell::from_bash("echo $_");
+        assert!(
+            result.contains("$_"),
+            "$_ at end of string should remain $_, got: {}",
+            result
+        );
+        assert!(
+            !result.contains("$env:_"),
+            "$_ should NOT become $env:_, got: {}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_from_bash_dollar_underscore_mid_string() {
+        // $_ followed by a space should still be $_
+        let result = powershell::from_bash("echo $_ foo");
+        assert!(
+            result.contains("$_"),
+            "$_ followed by space should remain $_, got: {}",
+            result
+        );
+        assert!(
+            !result.contains("$env:_"),
+            "$_ should NOT become $env:_, got: {}",
+            result
+        );
+    }
+
+    // ===== Issue #5: to_bash should not have O(n^2) allocation =====
+
+    #[test]
+    fn test_to_bash_large_input_no_regression() {
+        // Verify correctness on a moderately large input (the fix is about
+        // performance, but we test correctness here).
+        let large = "$env:HOME ".repeat(500);
+        let result = powershell::to_bash(&large);
+        assert!(result.contains("$HOME"), "Should still convert $env:HOME");
+        assert!(!result.contains("$env:"), "Should not have leftover $env:");
+    }
+
+    #[test]
+    fn test_to_bash_unicode_safe() {
+        // Ensure the byte-level scanning in to_bash handles non-ASCII
+        let result = powershell::to_bash("Write-Output $env:HOME \u{1F600}");
+        assert!(result.contains("$HOME"));
+        assert!(result.contains("\u{1F600}"));
+    }
+
     // ===== command_map tests =====
 
     #[test]
@@ -791,5 +977,20 @@ mod tests {
         assert_eq!(map.get("cat"), Some(&"Get-Content"));
         assert_eq!(map.get("ls"), Some(&"Get-ChildItem"));
         assert_eq!(map.get("pwd"), Some(&"Get-Location"));
+    }
+
+    #[test]
+    fn test_operator_map_uses_native_pipeline_operators() {
+        let map = command_map::bash_operators_to_powershell();
+        assert_eq!(
+            map.get("&&"),
+            Some(&"&&"),
+            "&&  should map to && for PowerShell 7+"
+        );
+        assert_eq!(
+            map.get("||"),
+            Some(&"||"),
+            "|| should map to || for PowerShell 7+"
+        );
     }
 }
