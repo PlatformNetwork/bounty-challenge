@@ -132,7 +132,7 @@ docker build -t bounty-challenge .
 Points are calculated as:
 - 1 point per valid issue
 - 0.25 points per starred repository (max 5 repos)
-- -2 penalty per invalid issue
+- Dynamic penalty: max(0, invalid_count - valid_count)
 
 Weight formula: `min(points × 0.02, 1.0)`
 

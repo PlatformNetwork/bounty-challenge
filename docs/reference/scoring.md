@@ -129,17 +129,28 @@ Earn 0.25 points by starring each of these repositories:
 
 ### Invalid Issues
 
-Issues marked with the `invalid` label incur penalties:
+Issues marked with the `invalid` label incur dynamic penalties based on the ratio of invalid to valid issues:
 
-| Action | Effect |
-|--------|--------|
-| **Invalid Issue** | -2 penalty points |
+| Condition | Penalty |
+|-----------|---------|
+| `invalid_count <= valid_count` | 0 points (no penalty) |
+| `invalid_count > valid_count` | `invalid_count - valid_count` points |
 
 ### Balance Calculation
 
-$$balance = valid_{issues} - (invalid_{issues} \times 2)$$
+$$penalty = \max(0, invalid_{count} - valid_{count})$$
+$$balance = valid_{issues} - penalty$$
 
 If `balance < 0`, your weight becomes **0** (penalized).
+
+### Dynamic Penalty Examples
+
+| Valid | Invalid | Penalty | Balance | Explanation |
+|-------|---------|---------|---------|-------------|
+| 5 | 3 | 0 | 5 | 3 <= 5, no penalty |
+| 5 | 5 | 0 | 5 | 5 <= 5, no penalty |
+| 5 | 7 | 2 | 3 | 7 - 5 = 2 penalty |
+| 2 | 6 | 4 | -2 | 6 - 2 = 4 penalty |
 
 ### Recovery
 
@@ -150,11 +161,11 @@ To recover from penalty status:
 
 ### Examples
 
-| Miner | Valid | Invalid | Balance | Status |
-|-------|-------|---------|---------|--------|
-| A | 5 | 2 | 4 | ✅ OK |
-| B | 3 | 8 | -1 | ❌ Penalized |
-| C | 10 | 0 | 10 | ✅ OK |
+| Miner | Valid | Invalid | Penalty | Balance | Status |
+|-------|-------|---------|---------|---------|--------|
+| A | 5 | 2 | 0 | 5 | ✅ OK |
+| B | 3 | 8 | 5 | -2 | ❌ Penalized |
+| C | 10 | 0 | 0 | 10 | ✅ OK |
 
 ---
 
@@ -209,18 +220,21 @@ If they get 2 more valid issues:
   Weight: min(51.25 × 0.02, 1.0) = 1.0 (100% capped)
 ```
 
-### Example 4: Penalized Miner
+### Example 4: Dynamic Penalty
 
 ```
-Miner has 3 valid issues but 8 invalid issues:
+Miner has 3 valid issues and 8 invalid issues:
   Valid Points: 3
-  Penalty Points: 8 × 2 = 16
-  Net Points: 3 - 16 = -13 (negative)
+  Invalid Count: 8
+  Penalty: max(0, 8 - 3) = 5 points
+  Net Points: 3 - 5 = -2 (negative)
   Weight: 0 (penalized)
 
-To recover, they need 14 more valid issues:
-  Net Points: 17 - 16 = 1 (positive)
-  Weight: 1 × 0.02 = 0.02 (2%)
+To recover, they need 3 more valid issues:
+  Valid: 6, Invalid: 8
+  Penalty: max(0, 8 - 6) = 2
+  Net Points: 6 - 2 = 4 (positive)
+  Weight: 4 × 0.02 = 0.08 (8%)
 ```
 
 ---
@@ -235,7 +249,7 @@ To recover, they need 14 more valid issues:
 | `weight_per_point` | 0.02 | Weight earned per point |
 | `valid_label` | "valid" | Required label for rewards |
 | `star_bonus_per_repo` | 0.25 | Points per starred repo |
-| `invalid_penalty` | 2 | Points deducted per invalid |
+| `invalid_penalty` | dynamic | max(0, invalid - valid) |
 | `min_valid_for_stars` | 2 | Min valid issues for star bonus |
 
 ### Configuration File
@@ -257,7 +271,7 @@ valid_label = "valid"
 flowchart LR
     A["Valid Issue"] --> B["+1 Point"]
     C["Star Repo"] --> D["+0.25 Points"]
-    E["Invalid Issue"] --> F["-2 Points"]
+    E["Invalid Issue"] --> F["Dynamic Penalty"]
     B --> G["Total Points"]
     D --> G
     F --> G
