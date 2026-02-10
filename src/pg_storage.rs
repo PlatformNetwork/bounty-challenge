@@ -331,6 +331,39 @@ impl PgStorage {
             info!("Applied migration 012_remove_weight_cap");
         }
 
+        // Check for duplicate issues migration (version 13)
+        let has_duplicate_issues: bool = client
+            .query_one(
+                "SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version = 13)",
+                &[],
+            )
+            .await?
+            .get(0);
+
+        if !has_duplicate_issues {
+            let migration_sql = include_str!("../migrations/013_duplicate_issues.sql");
+            client.batch_execute(migration_sql).await?;
+            info!("Applied migration 013_duplicate_issues");
+        }
+
+        // Check for dynamic penalty migration (version 14)
+        // Changes penalty from fixed 2-point per invalid issue to dynamic:
+        // - No penalty if invalid_count <= valid_count
+        // - Penalty = (invalid_count - valid_count) when invalid_count > valid_count
+        let has_dynamic_penalty: bool = client
+            .query_one(
+                "SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version = 14)",
+                &[],
+            )
+            .await?
+            .get(0);
+
+        if !has_dynamic_penalty {
+            let migration_sql = include_str!("../migrations/014_dynamic_penalty.sql");
+            client.batch_execute(migration_sql).await?;
+            info!("Applied migration 014_dynamic_penalty");
+        }
+
         Ok(())
     }
 
@@ -634,15 +667,24 @@ impl PgStorage {
             .await?;
         let valid_points: f64 = valid_row.get::<_, f64>(0);
 
-        // Get user's invalid points (2.0 penalty per invalid issue) in last 24h
+        // Get user's invalid count in last 24h (dynamic penalty)
         let invalid_row = client
             .query_one(
-                "SELECT COUNT(*)::FLOAT8 * 2.0 FROM invalid_issues 
+                "SELECT COUNT(*)::FLOAT8 FROM invalid_issues 
                  WHERE hotkey = $1 AND recorded_at >= NOW() - INTERVAL '24 hours'",
                 &[&hotkey],
             )
             .await?;
-        let invalid_penalty: f64 = invalid_row.get::<_, f64>(0);
+        let invalid_count: f64 = invalid_row.get::<_, f64>(0);
+
+        // Dynamic penalty: only penalize excess invalid issues beyond valid count
+        // No penalty if invalid_count <= valid_count
+        // Penalty = (invalid_count - valid_count) when invalid_count > valid_count
+        let invalid_penalty: f64 = if invalid_count > valid_points {
+            invalid_count - valid_points
+        } else {
+            0.0
+        };
 
         // Get user's duplicate penalty (0.5 penalty per duplicate issue) in last 24h
         let duplicate_row = client
@@ -850,8 +892,7 @@ impl PgStorage {
                 user_invalid_24h AS (
                     SELECT 
                         r.hotkey,
-                        COUNT(*) as invalid_count,
-                        (COUNT(*)::FLOAT * 2.0)::INTEGER as invalid_penalty_points  -- 2.0 penalty per invalid issue
+                        COUNT(*) as invalid_count
                     FROM github_registrations r
                     JOIN invalid_issues ii ON r.hotkey = ii.hotkey
                     WHERE ii.recorded_at >= NOW() - INTERVAL '24 hours'
@@ -899,8 +940,8 @@ impl PgStorage {
                     COALESCE(ui.invalid_count, 0)::INTEGER as invalid_issues,
                     COALESCE(ud.duplicate_count, 0)::INTEGER as duplicate_issues,
                     COALESCE(uv.total_points, 0)::INTEGER as total_points,
-                    (COALESCE(ui.invalid_penalty_points, 0) + COALESCE(ud.duplicate_penalty_points, 0))::INTEGER as penalty_points,
-                    (COALESCE(uv.total_points, 0) - COALESCE(ui.invalid_penalty_points, 0) - COALESCE(ud.duplicate_penalty_points, 0))::INTEGER as net_points,
+                    (GREATEST(0, COALESCE(ui.invalid_count, 0) - COALESCE(uv.valid_count, 0)) + COALESCE(ud.duplicate_penalty_points, 0))::INTEGER as penalty_points,
+                    (COALESCE(uv.total_points, 0) - GREATEST(0, COALESCE(ui.invalid_count, 0) - COALESCE(uv.valid_count, 0)) - COALESCE(ud.duplicate_penalty_points, 0))::INTEGER as net_points,
                     COALESCE(us.star_count, 0)::INTEGER as star_count,
                     COALESCE(us.starred_repos, ARRAY[]::TEXT[]) as starred_repos,
                     CASE 
