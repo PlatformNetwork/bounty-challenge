@@ -364,6 +364,26 @@ impl PgStorage {
             info!("Applied migration 014_dynamic_penalty");
         }
 
+        // Check for 24h consistency fix migration (version 15)
+        // Fixes critical inconsistencies between SQL views and Rust code:
+        // - user_balance view now uses 24h windows (was all-time)
+        // - current_weights view uses 24h-based penalty (not all-time user_balance)
+        // - Weight formula aligned: 0.02 per point (was 0.01 in SQL)
+        // - Star bonus (0.25/star) and duplicate penalty (0.5/dup) included
+        let has_24h_fix: bool = client
+            .query_one(
+                "SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version = 15)",
+                &[],
+            )
+            .await?
+            .get(0);
+
+        if !has_24h_fix {
+            let migration_sql = include_str!("../migrations/015_fix_24h_consistency.sql");
+            client.batch_execute(migration_sql).await?;
+            info!("Applied migration 015_fix_24h_consistency");
+        }
+
         Ok(())
     }
 
