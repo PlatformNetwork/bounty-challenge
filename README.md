@@ -100,7 +100,7 @@ See [Scoring Documentation](docs/reference/scoring.md) for complete specificatio
 
 > **WARNING**: Issues marked with `invalid` or `duplicate` labels count against you!
 
-Penalties are applied **separately** for invalid and duplicate issues. Each type only triggers a penalty when its count exceeds your valid issue count.
+Penalties are **independent**: your valid issues shield you separately against invalid and duplicate counts. Each type is compared to your valid count on its own -- only the excess is penalized.
 
 | Rule | Description |
 |------|-------------|

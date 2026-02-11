@@ -688,7 +688,7 @@ impl PgStorage {
     /// Points system:
     /// - 1 point per resolved issue (flat rate)
     /// - 0.25 points per starred repo
-    /// - Unified penalty: max(0, (invalid + duplicate) - valid)
+    /// - Separate penalties: max(0, invalid - valid) + max(0, duplicate - valid)
     /// - Raw weight = net_points * 0.02 (normalized at API level)
     /// - Negative net points = 0% weight
     pub async fn calculate_user_weight(&self, hotkey: &str) -> Result<f64> {

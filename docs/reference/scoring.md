@@ -127,63 +127,126 @@ Earn 0.25 points by starring each of these repositories:
 
 ## Penalty System
 
-### Overview
+> **TL;DR:** Your valid issues act as a **separate shield** against each penalty type. Invalid and duplicate penalties are calculated **independently** -- your valid count is compared against each one on its own. Only the excess above your valid count is penalized.
 
-Penalties are applied separately for **invalid** and **duplicate** issues. Each penalty type is calculated independently against the valid issue count.
+### How Penalties Work
 
-### Invalid Issues
+There are two types of bad issues that can hurt your score:
 
-Issues marked with the `invalid` label incur dynamic penalties:
+| Label | Meaning |
+|-------|---------|
+| `invalid` | The issue was rejected as not a real bug or not useful |
+| `duplicate` | The issue was already reported by someone else |
 
-| Condition | Penalty |
-|-----------|---------|
-| `invalid_count <= valid_count` | 0 points (no penalty) |
-| `invalid_count > valid_count` | `invalid_count - valid_count` points |
+Each type is penalized **independently**. Your valid issue count serves as a forgiveness threshold for each type separately. You are only penalized for the excess beyond that threshold.
 
-### Duplicate Issues
+**Invalid penalty:**
+$$penalty_{invalid} = \max(0, \; invalid\_count - valid\_count)$$
 
-Issues marked with the `duplicate` label also incur separate dynamic penalties:
+**Duplicate penalty:**
+$$penalty_{duplicate} = \max(0, \; duplicate\_count - valid\_count)$$
 
-| Condition | Penalty |
-|-----------|---------|
-| `duplicate_count <= valid_count` | 0 points (no penalty) |
-| `duplicate_count > valid_count` | `duplicate_count - valid_count` points |
+**Total penalty:**
+$$penalty = penalty_{invalid} + penalty_{duplicate}$$
 
-### Unified Penalty Formula
-
-$$penalty = \max(0, invalid\_count - valid\_count) + \max(0, duplicate\_count - valid\_count)$$
-
+**Net points (final score):**
 $$net\_points = valid\_count + star\_bonus - penalty$$
 
-If `net_points <= 0`, weight becomes **0** (penalized).
+If `net_points <= 0`, your weight becomes **0** (penalized).
 
-> **Note:** Invalid and duplicate penalties are computed separately. Each type only triggers a penalty when its count exceeds the valid issue count.
+### Why Separate Penalties?
 
-### Dynamic Penalty Examples
+This is the most important detail to understand. The two penalty types are **not** combined before comparison. Each one is checked against your valid count on its own.
 
-| Valid | Invalid | Duplicate | Invalid Penalty | Duplicate Penalty | Total Penalty | Net Points |
-|-------|---------|-----------|-----------------|-------------------|---------------|------------|
-| 5 | 3 | 2 | 0 | 0 | 0 | 5 |
-| 5 | 7 | 2 | 2 | 0 | 2 | 3 |
-| 5 | 3 | 8 | 0 | 3 | 3 | 2 |
-| 5 | 7 | 8 | 2 | 3 | 5 | 0 |
-| 2 | 6 | 4 | 4 | 2 | 6 | -4 (penalized) |
+This matters because the results are different:
+
+| Approach | Formula | 5 valid, 4 invalid, 4 duplicate |
+|----------|---------|----------------------------------|
+| **Combined** (NOT how it works) | `max(0, (4+4) - 5) = 3` | 3 penalty points |
+| **Separate** (how it actually works) | `max(0, 4-5) + max(0, 4-5) = 0 + 0 = 0` | 0 penalty points |
+
+In the separate model, as long as each individual type stays at or below your valid count, you get no penalty at all -- even if the combined total exceeds your valid count.
+
+Conversely, if both types exceed your valid count, you get penalized for each excess:
+
+| Approach | Formula | 5 valid, 7 invalid, 8 duplicate |
+|----------|---------|----------------------------------|
+| **Combined** (NOT how it works) | `max(0, (7+8) - 5) = 10` | 10 penalty points |
+| **Separate** (how it actually works) | `max(0, 7-5) + max(0, 8-5) = 2 + 3 = 5` | 5 penalty points |
+
+### Step-by-Step Examples
+
+**Scenario 1 -- Clean miner (no penalties)**
+
+```
+Valid: 5, Invalid: 3, Duplicate: 2
+  Invalid penalty:   max(0, 3 - 5) = 0   (3 <= 5, forgiven)
+  Duplicate penalty: max(0, 2 - 5) = 0   (2 <= 5, forgiven)
+  Total penalty: 0
+  Net points: 5 - 0 = 5
+  Weight: 5 × 0.02 = 10%
+```
+
+**Scenario 2 -- Only invalid issues exceed threshold**
+
+```
+Valid: 5, Invalid: 7, Duplicate: 2
+  Invalid penalty:   max(0, 7 - 5) = 2   (7 > 5, excess = 2)
+  Duplicate penalty: max(0, 2 - 5) = 0   (2 <= 5, forgiven)
+  Total penalty: 2
+  Net points: 5 - 2 = 3
+  Weight: 3 × 0.02 = 6%
+```
+
+**Scenario 3 -- Only duplicate issues exceed threshold**
+
+```
+Valid: 5, Invalid: 3, Duplicate: 8
+  Invalid penalty:   max(0, 3 - 5) = 0   (3 <= 5, forgiven)
+  Duplicate penalty: max(0, 8 - 5) = 3   (8 > 5, excess = 3)
+  Total penalty: 3
+  Net points: 5 - 3 = 2
+  Weight: 2 × 0.02 = 4%
+```
+
+**Scenario 4 -- Both types exceed threshold**
+
+```
+Valid: 5, Invalid: 7, Duplicate: 8
+  Invalid penalty:   max(0, 7 - 5) = 2
+  Duplicate penalty: max(0, 8 - 5) = 3
+  Total penalty: 2 + 3 = 5
+  Net points: 5 - 5 = 0
+  Weight: 0 (penalized)
+```
+
+**Scenario 5 -- Heavily penalized**
+
+```
+Valid: 2, Invalid: 6, Duplicate: 4
+  Invalid penalty:   max(0, 6 - 2) = 4
+  Duplicate penalty: max(0, 4 - 2) = 2
+  Total penalty: 4 + 2 = 6
+  Net points: 2 - 6 = -4 (negative)
+  Weight: 0 (penalized)
+```
 
 ### Recovery
 
 To recover from penalty status:
 1. Submit new valid issues (within the 24h window)
-2. Accumulate positive net points
-3. Weight returns when net_points > 0
+2. As your valid count rises, each penalty threshold rises with it
+3. Weight returns as soon as `net_points > 0`
 
-### Examples
+### Summary Table
 
-| Miner | Valid | Invalid | Duplicate | Penalty | Net Points | Status |
-|-------|-------|---------|-----------|---------|------------|--------|
-| A | 5 | 2 | 1 | 0 | 5 | OK |
-| B | 3 | 8 | 0 | 5 | -2 | Penalized |
-| C | 10 | 0 | 0 | 0 | 10 | OK |
-| D | 4 | 6 | 6 | 4 | 0 | Penalized |
+| Miner | Valid | Invalid | Duplicate | Inv. Penalty | Dup. Penalty | Total Penalty | Net Points | Status |
+|-------|-------|---------|-----------|--------------|--------------|---------------|------------|--------|
+| A | 5 | 2 | 1 | 0 | 0 | 0 | 5 | OK |
+| B | 5 | 7 | 2 | 2 | 0 | 2 | 3 | OK |
+| C | 5 | 3 | 8 | 0 | 3 | 3 | 2 | OK |
+| D | 5 | 7 | 8 | 2 | 3 | 5 | 0 | Penalized |
+| E | 2 | 6 | 4 | 4 | 2 | 6 | -4 | Penalized |
 
 ---
 
