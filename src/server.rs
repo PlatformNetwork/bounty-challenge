@@ -3,6 +3,7 @@
 //! HTTP server for challenge endpoints.
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use axum::{
     extract::{Path, Query, State},
@@ -12,8 +13,10 @@ use axum::{
 };
 
 use serde::{Deserialize, Serialize};
+use tokio::sync::RwLock;
+use tokio::time::timeout;
 use tower_http::cors::CorsLayer;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 use crate::auth::is_valid_ss58_hotkey;
 use crate::challenge::BountyChallenge;
@@ -23,10 +26,16 @@ use platform_challenge_sdk::server::{
     ValidationResponse,
 };
 
+pub struct WeightsCache {
+    pub weights: Vec<crate::pg_storage::CurrentWeight>,
+    pub updated_at: std::time::Instant,
+}
+
 pub struct AppState {
     pub challenge: Arc<BountyChallenge>,
     pub storage: Arc<PgStorage>,
     pub started_at: std::time::Instant,
+    pub weights_cache: RwLock<WeightsCache>,
 }
 
 pub fn create_router(state: Arc<AppState>) -> Router {
@@ -66,6 +75,20 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         // browser-based tools, CLI clients, and third-party integrations from any origin
         .layer(CorsLayer::permissive())
         .with_state(state)
+}
+
+pub async fn refresh_weights_cache(state: &Arc<AppState>) {
+    match state.storage.get_current_weights().await {
+        Ok(weights) => {
+            let mut cache = state.weights_cache.write().await;
+            cache.weights = weights;
+            cache.updated_at = std::time::Instant::now();
+            tracing::debug!("Weights cache refreshed ({} entries)", cache.weights.len());
+        }
+        Err(e) => {
+            error!("Failed to refresh weights cache: {}", e);
+        }
+    }
 }
 
 async fn health_handler(State(state): State<Arc<AppState>>) -> Json<HealthResponse> {
@@ -174,17 +197,25 @@ async fn get_weights_handler(
         now / 12
     });
 
-    // Get current weights from PostgreSQL
-    let current_weights = match state.storage.get_current_weights().await {
-        Ok(w) => w,
-        Err(e) => {
-            error!("Failed to get weights: {}", e);
-            return Json(GetWeightsResponse {
-                epoch,
-                weights: vec![],
-            });
-        }
-    };
+    // Try to get fresh weights from PostgreSQL with a 2s timeout
+    // On success, update the cache; on timeout/error, fall back to cached data
+    let current_weights =
+        match timeout(Duration::from_secs(2), state.storage.get_current_weights()).await {
+            Ok(Ok(w)) => {
+                let mut cache = state.weights_cache.write().await;
+                cache.weights = w.clone();
+                cache.updated_at = std::time::Instant::now();
+                w
+            }
+            Ok(Err(e)) => {
+                warn!("SQL error fetching weights, using cache: {}", e);
+                state.weights_cache.read().await.weights.clone()
+            }
+            Err(_) => {
+                warn!("Weights query timed out after 2s, using cache");
+                state.weights_cache.read().await.weights.clone()
+            }
+        };
 
     // Convert to WeightEntry with normalization
     // Each user's raw weight = their points * 0.02 (NO CAP - proportional to points)
@@ -522,11 +553,7 @@ pub struct StatsResponse {
 async fn stats_handler(State(state): State<Arc<AppState>>) -> Json<StatsResponse> {
     // Get stats from PostgreSQL - ALL STATS ARE 24H ONLY
     let stats = state.storage.get_stats_24h().await.ok();
-    let current_weights = state
-        .storage
-        .get_current_weights()
-        .await
-        .unwrap_or_default();
+    let current_weights = state.weights_cache.read().await.weights.clone();
 
     // Count miners with activity in last 24h (weight > 0)
     let active_miners = current_weights.iter().filter(|w| w.weight > 0.0).count();
@@ -806,7 +833,24 @@ pub async fn run_server(
         challenge,
         storage,
         started_at: std::time::Instant::now(),
+        weights_cache: RwLock::new(WeightsCache {
+            weights: vec![],
+            updated_at: std::time::Instant::now(),
+        }),
     });
+
+    refresh_weights_cache(&state).await;
+
+    let cache_state = state.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(Duration::from_secs(300));
+        interval.tick().await;
+        loop {
+            interval.tick().await;
+            refresh_weights_cache(&cache_state).await;
+        }
+    });
+    info!("Weights cache background refresh started (every 300 seconds)");
 
     let app = create_router(state);
     let addr = format!("{}:{}", host, port);
