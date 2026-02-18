@@ -10,6 +10,7 @@ use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::process::Command;
+use tokio::process::Command as AsyncCommand;
 use tracing::{error, info, warn};
 
 /// Issue data from gh CLI
@@ -126,14 +127,13 @@ impl GhCli {
 
     /// List all issues (open and closed) using gh CLI
     /// This is the most reliable way to get all issues with proper pagination
-    pub fn list_all_issues(&self) -> Result<Vec<GhIssue>> {
+    pub async fn list_all_issues(&self) -> Result<Vec<GhIssue>> {
         info!(
             "Fetching all issues from {} using gh CLI",
             self.repo_string()
         );
 
-        // gh issue list --repo owner/repo --state all --json fields --limit 1000
-        let output = Command::new("gh")
+        let output = AsyncCommand::new("gh")
             .args([
                 "issue",
                 "list",
@@ -142,12 +142,13 @@ impl GhCli {
                 "--state",
                 "all",
                 "--limit",
-                "10000", // High limit to get all issues
+                "10000",
                 "--json",
                 "number,title,body,state,author,labels,createdAt,updatedAt,closedAt,url",
             ])
             .env("GH_TOKEN", get_gh_token().unwrap_or_default())
             .output()
+            .await
             .context("Failed to run gh issue list")?;
 
         if !output.status.success() {
@@ -187,7 +188,7 @@ pub async fn sync_repo_with_gh(
     let gh = GhCli::new(owner, repo);
 
     // Fetch all issues via gh CLI
-    let issues = gh.list_all_issues()?;
+    let issues = gh.list_all_issues().await?;
 
     let mut result = SyncResult {
         total_fetched: issues.len(),
