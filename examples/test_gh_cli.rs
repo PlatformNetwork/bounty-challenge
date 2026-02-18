@@ -3,7 +3,8 @@
 
 use bounty_challenge::GhCli;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     println!("=== Testing gh CLI Rust integration ===\n");
 
     // Test 1: Check if gh is available
@@ -18,7 +19,7 @@ fn main() {
     // Test 2: List issues from bounty-challenge repo
     println!("\n2. Listing issues from platformnetwork/bounty-challenge...");
     let gh = GhCli::new("platformnetwork", "bounty-challenge");
-    match gh.list_all_issues() {
+    match gh.list_all_issues().await {
         Ok(issues) => {
             println!("   ✓ Found {} issues", issues.len());
 
