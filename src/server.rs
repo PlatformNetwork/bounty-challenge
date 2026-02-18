@@ -14,9 +14,8 @@ use axum::{
 
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
-use tokio::time::timeout;
 use tower_http::cors::CorsLayer;
-use tracing::{error, info, warn};
+use tracing::{error, info};
 
 use crate::auth::is_valid_ss58_hotkey;
 use crate::challenge::BountyChallenge;
@@ -197,25 +196,8 @@ async fn get_weights_handler(
         now / 12
     });
 
-    // Try to get fresh weights from PostgreSQL with a 2s timeout
-    // On success, update the cache; on timeout/error, fall back to cached data
-    let current_weights =
-        match timeout(Duration::from_secs(2), state.storage.get_current_weights()).await {
-            Ok(Ok(w)) => {
-                let mut cache = state.weights_cache.write().await;
-                cache.weights = w.clone();
-                cache.updated_at = std::time::Instant::now();
-                w
-            }
-            Ok(Err(e)) => {
-                warn!("SQL error fetching weights, using cache: {}", e);
-                state.weights_cache.read().await.weights.clone()
-            }
-            Err(_) => {
-                warn!("Weights query timed out after 2s, using cache");
-                state.weights_cache.read().await.weights.clone()
-            }
-        };
+    // Always serve from cache (refreshed every 5 minutes by background task)
+    let current_weights = state.weights_cache.read().await.weights.clone();
 
     // Convert to WeightEntry with normalization
     // Each user's raw weight = their points * 0.02 (NO CAP - proportional to points)

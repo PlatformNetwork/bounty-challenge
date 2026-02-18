@@ -9,7 +9,7 @@ use bounty_challenge::{BountyChallenge, GitHubClient, PgStorage};
 use tracing::{error, info, warn};
 use tracing_subscriber::EnvFilter;
 
-const SYNC_INTERVAL_SECS: u64 = 300; // 5 minutes
+const SYNC_INTERVAL_SECS: u64 = 600; // 10 minutes
 const STAR_SYNC_INTERVAL_SECS: u64 = 300; // 5 minutes
 const HEARTBEAT_INTERVAL_SECS: u64 = 60; // 1 minute - check GitHub API health
 
@@ -43,7 +43,7 @@ async fn main() -> anyhow::Result<()> {
         .and_then(|p| p.parse().ok())
         .unwrap_or(8080);
 
-    // Start background GitHub sync task (every 5 minutes)
+    // Start background GitHub sync task (every 10 minutes)
     let sync_storage = storage.clone();
     tokio::spawn(async move {
         // Initial sync after 10 seconds
