@@ -2,7 +2,7 @@
 
 # bουηtү chαllεηgε
 
-**GitHub Issue Reward System for Platform Network**
+**Decentralized Bug Bounty Protocol — Earn TAO by Improving Open Source Software**
 
 [![CI](https://github.com/PlatformNetwork/bounty-challenge/actions/workflows/ci.yml/badge.svg)](https://github.com/PlatformNetwork/bounty-challenge/actions/workflows/ci.yml)
 [![License](https://img.shields.io/github/license/PlatformNetwork/bounty-challenge)](https://github.com/PlatformNetwork/bounty-challenge/blob/main/LICENSE)
