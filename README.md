@@ -13,92 +13,100 @@
 
 </div>
 
-Bounty Challenge is a WASM evaluation module for [Platform Network](https://github.com/PlatformNetwork/platform-v2). Miners earn rewards by discovering and reporting valid GitHub issues. Issues must be closed with the `valid` label by project maintainers to qualify for rewards.
+Bounty Challenge is a WASM evaluation module for [Platform Network](https://github.com/PlatformNetwork/platform). Miners earn rewards by discovering and reporting valid GitHub issues. Issues must be closed with the `valid` label by project maintainers to qualify for rewards.
 
 > **IMPORTANT**: To receive rewards, you MUST submit issues in **this repository** ([PlatformNetwork/bounty-challenge](https://github.com/PlatformNetwork/bounty-challenge/issues)). Issues submitted directly to other repositories will **NOT** be counted for rewards.
 
 ## How to Mine
 
-### 1. Register Your Hotkey
-
-Before mining, register your GitHub username with your Bittensor hotkey using the CLI:
+### 1. Install the CLI
 
 ```bash
-# Build the CLI
-cargo build --release -p bounty-cli
+# Download the latest release
+platform download bounty-cli
 
-# Register (replace with your values)
-./target/release/bounty-cli register \
-  --hotkey YOUR_SS58_HOTKEY \
-  --github YOUR_GITHUB_USERNAME \
-  --signature YOUR_HEX_SIGNATURE \
-  --timestamp UNIX_TIMESTAMP \
-  --rpc-url http://VALIDATOR_IP:8080
+# Or build from source
+cargo build --release -p bounty-cli
 ```
 
-The signature is created by signing the message `register_github:{username_lowercase}:{timestamp}` with your sr25519 hotkey. The timestamp must be within 5 minutes of the validator's server time.
+### 2. Launch the Interactive CLI
 
-### 2. Find and Report Issues
+```bash
+# Set validator RPC URL (optional, defaults to localhost:8080)
+export BOUNTY_RPC_URL=http://VALIDATOR_IP:8080
+
+# Launch interactive TUI
+bounty-cli
+```
+
+The CLI provides an interactive menu with live dashboards:
+
+```
+  bounty-challenge
+  RPC: http://localhost:8080
+
+? Select an action ›
+❯ Leaderboard        (live dashboard)
+  Challenge Stats    (live dashboard)
+  Weights            (live dashboard)
+  My Status
+  Issues
+  Pending Issues
+  Register
+  Claim Bounty
+  Change RPC URL
+  Quit
+```
+
+### 3. Register Your Hotkey
+
+Select **Register** from the menu and follow the prompts:
+- Enter your SS58 hotkey
+- Enter your GitHub username
+- Provide your signature and timestamp
+
+The signature is created by signing `register_github:{username_lowercase}:{timestamp}` with your sr25519 hotkey.
+
+### 4. Find and Report Issues
 
 1. Discover valid bugs or issues in eligible repositories
 2. Submit the issue in **this repository** ([PlatformNetwork/bounty-challenge](https://github.com/PlatformNetwork/bounty-challenge/issues))
 3. Wait for project maintainers to review and close the issue with the `valid` label
 
-### 3. Check Your Status
+### 5. Claim Your Bounty
 
-```bash
-# View the leaderboard
-./target/release/bounty-cli leaderboard --rpc-url http://VALIDATOR_IP:8080
+Select **Claim Bounty** from the menu and enter the issue numbers you want to claim.
 
-# Check your miner status
-./target/release/bounty-cli status --hotkey YOUR_SS58_HOTKEY --rpc-url http://VALIDATOR_IP:8080
+### 6. Track Your Progress
 
-# View challenge statistics
-./target/release/bounty-cli stats --rpc-url http://VALIDATOR_IP:8080
-```
+Use the live dashboards to monitor:
+- **Leaderboard**: Real-time rankings with scores
+- **Challenge Stats**: Total bounties, active miners, validator count
+- **Weights**: Current weight assignments for rewards
+- **My Status**: Your registration, valid/invalid issues, and weight
 
-### 4. Earn Rewards
+## CLI Features
 
-Rewards are distributed based on your weight, which is calculated from your valid issues and star bonuses. See [Scoring & Rewards](docs/reference/scoring.md) for the full formula.
-
-## CLI
-
-The `bounty-cli` binary communicates with Platform Network validators via JSON-RPC.
-
-### Installation
-
-```bash
-cargo build --release -p bounty-cli
-```
-
-### Commands
-
-```bash
-# Show leaderboard (top 50 by default)
-bounty-cli leaderboard [--limit N] [--rpc-url URL]
-
-# Register GitHub username with hotkey
-bounty-cli register --hotkey HOTKEY --github USERNAME --signature SIG --timestamp TS [--rpc-url URL]
-
-# Check miner status
-bounty-cli status --hotkey HOTKEY [--rpc-url URL]
-
-# Show challenge statistics
-bounty-cli stats [--rpc-url URL]
-```
-
-The `--rpc-url` flag defaults to `http://localhost:8080`. You can also set the `BOUNTY_RPC_URL` environment variable.
+| Feature | Description |
+|---------|-------------|
+| **Live Dashboards** | Auto-refreshing leaderboard, stats, and weights views |
+| **Interactive Registration** | Guided hotkey + GitHub registration |
+| **Claim Management** | Easy bounty claiming interface |
+| **Issue Browser** | View all synced and pending issues |
+| **RPC Switcher** | Change validator endpoint on the fly |
 
 ## Architecture
 
-This project is a `#![no_std]` Rust crate compiled to `wasm32-unknown-unknown`. It implements the `Challenge` trait from [`platform-challenge-sdk-wasm`](https://github.com/PlatformNetwork/platform-v2/tree/main/crates/challenge-sdk-wasm) and runs inside the Platform Network validator runtime.
+This project is a `#![no_std]` Rust crate compiled to `wasm32-unknown-unknown`. It implements the `Challenge` trait from [`platform-challenge-sdk-wasm`](https://github.com/PlatformNetwork/platform/tree/main/crates/challenge-sdk-wasm) and runs inside the Platform Network validator runtime.
 
 ```mermaid
 flowchart LR
     subgraph Validator["Platform Validator"]
         Runtime["WASM Runtime"]
-        Storage["Host Storage"]
+        Storage["Distributed Storage"]
+        Consensus["P2P Consensus"]
         Runtime -->|"host_storage_get/set"| Storage
+        Storage -->|"StorageProposal"| Consensus
     end
     
     subgraph Module["bounty-challenge.wasm"]
@@ -108,7 +116,7 @@ flowchart LR
     end
     
     Runtime -->|"loads"| Module
-    Miner["🧑‍💻 Miner"] -->|"submit claims"| Evaluate
+    Miner["Miner CLI"] -->|"submit claims"| Evaluate
     API["Chain RPC"] -->|"route requests"| Routes
     Chain["On-Chain"] -->|"weight queries"| Weights
 ```
@@ -116,8 +124,8 @@ flowchart LR
 ### Key Features
 
 - **WASM Module**: Runs inside the validator's sandboxed WASM runtime
-- **On-Chain Storage**: All state persisted via host-provided key/value storage
-- **Validator Consensus**: Multi-validator agreement on issue validity and sync data
+- **Distributed Storage**: State replicated across validators via P2P consensus
+- **Platform Consensus**: Storage writes go through StorageProposal/Vote system
 - **Weight Calculation**: Normalized weight assignments for on-chain rewards
 - **Chain RPC Routes**: Leaderboard, stats, registration, claims, and more
 
@@ -147,7 +155,9 @@ cargo build --release -p bounty-cli
 
 ### Weight Calculation
 
-$$W_{user} = net\_points \times 0.02$$
+```
+weight = net_points × 0.02
+```
 
 Where:
 - `net_points = valid_count + star_bonus - penalty`
@@ -163,52 +173,42 @@ Where:
 
 ## API Routes
 
-All routes are served through the Platform Network validator chain RPC. Access them via:
-
-- **HTTP**: `GET/POST http://VALIDATOR:8080/challenge/bounty-challenge/<path>`
-- **JSON-RPC**: `challenge_call` method at `http://VALIDATOR:8080/rpc`
+Routes are served through the Platform Network validator RPC at `/challenge/bounty-challenge/<path>`:
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
 | GET | `/leaderboard` | No | Current standings |
 | GET | `/stats` | No | Challenge statistics |
 | GET | `/status/:hotkey` | No | Hotkey status and balance |
-| POST | `/register` | Yes | Register GitHub username with hotkey |
-| POST | `/claim` | Yes | Claim bounty for resolved issues |
+| POST | `/register` | Yes | Register GitHub username |
+| POST | `/claim` | Yes | Claim bounty for issues |
 | GET | `/issues` | No | List all synced issues |
 | GET | `/issues/pending` | No | List pending issues |
-| GET | `/hotkey/:hotkey` | No | Detailed hotkey information |
-| POST | `/invalid` | Yes | Record an invalid issue |
-| POST | `/sync/propose` | Yes | Propose synced issue data |
-| GET | `/sync/consensus` | No | Check sync consensus status |
-| POST | `/issue/propose` | Yes | Propose issue validity |
-| POST | `/issue/consensus` | No | Check issue validity consensus |
-| GET | `/config/timeout` | No | Get timeout configuration |
-| POST | `/config/timeout` | Yes | Update timeout configuration |
-| GET | `/get_weights` | No | Normalized weight assignments |
+| GET | `/hotkey/:hotkey` | No | Detailed hotkey info |
+| POST | `/issues/sync` | Yes | Sync issue data |
+| GET | `/get_weights` | No | Weight assignments |
 
 ## Project Structure
 
 ```
 bounty-challenge/
-├── Cargo.toml               # Workspace + WASM crate config
+├── Cargo.toml               # Workspace config
 ├── bins/
-│   └── bounty-cli/          # CLI binary
-│       ├── Cargo.toml
-│       └── src/main.rs
+│   └── bounty-cli/          # Interactive CLI
+│       ├── src/
+│       │   ├── main.rs      # TUI menu
+│       │   ├── rpc.rs       # RPC client
+│       │   ├── tui/         # Live dashboards
+│       │   └── views/       # Interactive views
 ├── src/
-│   ├── lib.rs               # Challenge trait implementation
+│   ├── lib.rs               # Challenge trait impl
 │   ├── types.rs             # Domain types
 │   ├── scoring.rs           # Weight calculation
-│   ├── consensus.rs         # Validator consensus
-│   ├── validation.rs        # Issue validation and claims
-│   ├── routes.rs            # Route definitions and dispatch
-│   ├── api/
-│   │   └── handlers.rs      # Route handlers
-│   └── storage/
-│       └── bounty_storage.rs # Host key/value storage
-├── docs/                    # Documentation
-└── .github/workflows/       # CI configuration
+│   ├── validation.rs        # Issue validation
+│   ├── routes.rs            # Route definitions
+│   ├── api/handlers.rs      # Route handlers
+│   └── storage/             # Host storage
+└── docs/                    # Documentation
 ```
 
 ## Development
@@ -235,7 +235,7 @@ cargo build -p bounty-cli
 | **Signature Verification** | sr25519 signature proves hotkey ownership |
 | **Author Verification** | GitHub username must match issue author |
 | **First Reporter Wins** | Each issue can only be claimed once |
-| **Validator Consensus** | Multiple validators must agree on issue validity |
+| **Platform Consensus** | Storage writes require validator majority |
 | **Label Protection** | GitHub Actions prevent unauthorized label changes |
 
 ## Documentation
@@ -248,12 +248,6 @@ cargo build -p bounty-cli
   - [Scoring & Rewards](docs/reference/scoring.md)
   - [API Reference](docs/reference/api-reference.md)
   - [Anti-Abuse Mechanisms](docs/anti-abuse.md)
-
-## Acknowledgments
-
-- [Cortex Foundation](https://github.com/CortexLM) for the Cortex ecosystem
-- [Platform Network](https://github.com/PlatformNetwork) for the challenge SDK
-- [Bittensor](https://bittensor.com/) for the decentralized AI network
 
 ## License
 
