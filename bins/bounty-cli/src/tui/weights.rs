@@ -31,7 +31,11 @@ fn parse_weights(data: &Value) -> Vec<WeightEntry> {
                 })
             })
             .collect();
-        entries.sort_by(|a, b| b.weight.partial_cmp(&a.weight).unwrap_or(std::cmp::Ordering::Equal));
+        entries.sort_by(|a, b| {
+            b.weight
+                .partial_cmp(&a.weight)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         return entries;
     }
 
@@ -52,7 +56,11 @@ fn parse_weights(data: &Value) -> Vec<WeightEntry> {
                 })
             })
             .collect();
-        entries.sort_by(|a, b| b.weight.partial_cmp(&a.weight).unwrap_or(std::cmp::Ordering::Equal));
+        entries.sort_by(|a, b| {
+            b.weight
+                .partial_cmp(&a.weight)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         return entries;
     }
 
@@ -108,14 +116,12 @@ fn ui(frame: &mut Frame, entries: &[WeightEntry], scroll: usize, error: &Option<
         format!(" Weights — {} miners ", entries.len())
     };
 
-    let table = Table::new(rows, widths)
-        .header(header)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::Cyan))
-                .title(title),
-        );
+    let table = Table::new(rows, widths).header(header).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::Cyan))
+            .title(title),
+    );
 
     frame.render_widget(table, chunks[0]);
 

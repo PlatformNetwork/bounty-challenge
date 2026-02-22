@@ -34,10 +34,7 @@ fn print_issues(data: &Value) {
             .or_else(|| issue.get("issue_url"))
             .and_then(|v| v.as_str())
             .unwrap_or("?");
-        let title = issue
-            .get("title")
-            .and_then(|v| v.as_str())
-            .unwrap_or(url);
+        let title = issue.get("title").and_then(|v| v.as_str()).unwrap_or(url);
         let display = if title.len() > 47 {
             format!("{}...", &title[..47])
         } else {

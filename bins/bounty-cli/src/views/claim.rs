@@ -26,8 +26,7 @@ pub async fn run(rpc_url: &str) -> Result<()> {
         );
     }
 
-    let (pair, _seed) =
-        Pair::from_phrase(mnemonic, None).context("Invalid mnemonic phrase")?;
+    let (pair, _seed) = Pair::from_phrase(mnemonic, None).context("Invalid mnemonic phrase")?;
 
     let hotkey = sp_core::crypto::Ss58Codec::to_ss58check(&pair.public());
 
@@ -39,16 +38,8 @@ pub async fn run(rpc_url: &str) -> Result<()> {
     let signature = pair.sign(message.as_bytes());
     let sig_hex = hex::encode(signature.0);
 
-    println!(
-        "  {} {}",
-        style("Hotkey:").dim(),
-        style(&hotkey).green()
-    );
-    println!(
-        "  {} {}",
-        style("Issue:").dim(),
-        style(&issue_url).yellow()
-    );
+    println!("  {} {}", style("Hotkey:").dim(), style(&hotkey).green());
+    println!("  {} {}", style("Issue:").dim(), style(&issue_url).yellow());
 
     let body = serde_json::json!({
         "hotkey": hotkey,

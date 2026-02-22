@@ -58,9 +58,11 @@ fn stat_block<'a>(label: &'a str, value: u64, color: Color) -> Paragraph<'a> {
             Style::default().fg(color).bold(),
         )),
     ];
-    Paragraph::new(text)
-        .alignment(Alignment::Center)
-        .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(color)))
+    Paragraph::new(text).alignment(Alignment::Center).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(color)),
+    )
 }
 
 fn ui(frame: &mut Frame, stats: &StatsData, error: &Option<String>) {

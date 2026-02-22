@@ -19,8 +19,7 @@ pub async fn run(rpc_url: &str) -> Result<()> {
         0 => {
             let result = rpc_call(rpc_url, "GET", "/config/timeout", None).await?;
             let body = result.get("body").unwrap_or(&result);
-            let pretty =
-                serde_json::to_string_pretty(body).unwrap_or_else(|_| body.to_string());
+            let pretty = serde_json::to_string_pretty(body).unwrap_or_else(|_| body.to_string());
             println!("\n{}", pretty);
         }
         _ => {}

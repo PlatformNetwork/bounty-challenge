@@ -26,21 +26,15 @@ const MENU_ITEMS: &[&str] = &[
 
 fn print_header(rpc_url: &str) {
     println!();
-    println!(
-        "  {}",
-        style("bounty-challenge").cyan().bold()
-    );
-    println!(
-        "  {} {}",
-        style("RPC:").dim(),
-        style(rpc_url).green()
-    );
+    println!("  {}", style("bounty-challenge").cyan().bold());
+    println!("  {} {}", style("RPC:").dim(), style(rpc_url).green());
     println!();
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let mut rpc_url = std::env::var("BOUNTY_RPC_URL").unwrap_or_else(|_| DEFAULT_RPC_URL.to_string());
+    let mut rpc_url =
+        std::env::var("BOUNTY_RPC_URL").unwrap_or_else(|_| DEFAULT_RPC_URL.to_string());
 
     loop {
         print_header(&rpc_url);
@@ -74,7 +68,11 @@ async fn main() -> Result<()> {
                     .default(rpc_url.clone())
                     .interact_text()?;
                 rpc_url = new_url.trim_end_matches('/').to_string();
-                println!("  {} {}", style("RPC updated:").dim(), style(&rpc_url).green());
+                println!(
+                    "  {} {}",
+                    style("RPC updated:").dim(),
+                    style(&rpc_url).green()
+                );
                 Ok(())
             }
             12 => break,

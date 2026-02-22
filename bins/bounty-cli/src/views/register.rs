@@ -28,8 +28,7 @@ pub async fn run(rpc_url: &str) -> Result<()> {
 
     println!("{}", style("Deriving sr25519 keypair...").dim());
 
-    let (pair, _seed) =
-        Pair::from_phrase(mnemonic, None).context("Invalid mnemonic phrase")?;
+    let (pair, _seed) = Pair::from_phrase(mnemonic, None).context("Invalid mnemonic phrase")?;
 
     let hotkey = sp_core::crypto::Ss58Codec::to_ss58check(&pair.public());
 
@@ -37,25 +36,13 @@ pub async fn run(rpc_url: &str) -> Result<()> {
         .duration_since(std::time::UNIX_EPOCH)?
         .as_secs() as i64;
 
-    let message = format!(
-        "register_github:{}:{}",
-        github.to_lowercase(),
-        timestamp
-    );
+    let message = format!("register_github:{}:{}", github.to_lowercase(), timestamp);
 
     let signature = pair.sign(message.as_bytes());
     let sig_hex = hex::encode(signature.0);
 
-    println!(
-        "  {} {}",
-        style("Hotkey:").dim(),
-        style(&hotkey).green()
-    );
-    println!(
-        "  {} {}",
-        style("Message:").dim(),
-        style(&message).yellow()
-    );
+    println!("  {} {}", style("Hotkey:").dim(), style(&hotkey).green());
+    println!("  {} {}", style("Message:").dim(), style(&message).yellow());
 
     let body = serde_json::json!({
         "hotkey": hotkey,
