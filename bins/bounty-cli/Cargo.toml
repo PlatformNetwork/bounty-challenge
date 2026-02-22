@@ -2,7 +2,7 @@
 name = "bounty-cli"
 version = "2.0.0"
 edition = "2021"
-description = "CLI for Bounty Challenge — query leaderboard, register miners, check status"
+description = "Interactive TUI for Bounty Challenge on Platform Network"
 authors = ["CortexLM"]
 license = "Apache-2.0"
 
@@ -11,8 +11,13 @@ name = "bounty-cli"
 path = "src/main.rs"
 
 [dependencies]
-clap = { version = "4", features = ["derive", "env"] }
 reqwest = { version = "0.12", features = ["json"] }
 serde_json = "1.0"
 tokio = { version = "1", features = ["full"] }
 anyhow = "1"
+ratatui = "0.29"
+crossterm = "0.28"
+dialoguer = { version = "0.11", features = ["fuzzy-select"] }
+console = "0.15"
+sp-core = { version = "31.0", default-features = false, features = ["std"] }
+hex = "0.4"
