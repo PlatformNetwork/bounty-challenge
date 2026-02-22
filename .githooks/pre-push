@@ -1,6 +1,5 @@
 #!/bin/bash
-# Pre-push hook for bounty-challenge
-# Run this before pushing to ensure CI will pass
+# Pre-push hook for bounty-challenge (WASM module)
 
 # Source cargo environment
 [ -f "$HOME/.cargo/env" ] && source "$HOME/.cargo/env"
@@ -37,18 +36,18 @@ if ! cargo fmt --check 2>/dev/null; then
 fi
 check_passed "Format"
 
-# 2. Build check
+# 2. Build check (WASM target)
 echo ""
-echo "🔨 Checking compilation..."
-if ! cargo check --all-targets 2>/dev/null; then
+echo "🔨 Checking WASM compilation..."
+if ! cargo build --target wasm32-unknown-unknown 2>/dev/null; then
     check_failed "Compilation"
 fi
 check_passed "Compilation"
 
-# 3. Clippy
+# 3. Clippy (WASM target)
 echo ""
 echo "📎 Running clippy..."
-if ! cargo clippy --all-targets --workspace -- -W clippy::all -D warnings \
+if ! cargo clippy --target wasm32-unknown-unknown -- -W clippy::all -D warnings \
     -A clippy::too_many_arguments \
     -A clippy::type_complexity \
     -A clippy::large_enum_variant \
@@ -56,14 +55,6 @@ if ! cargo clippy --all-targets --workspace -- -W clippy::all -D warnings \
     check_failed "Clippy"
 fi
 check_passed "Clippy"
-
-# 4. Tests
-echo ""
-echo "🧪 Running tests..."
-if ! cargo test --workspace -- --skip live --skip integration 2>/dev/null; then
-    check_failed "Tests"
-fi
-check_passed "Tests"
 
 echo ""
 echo -e "${GREEN}✅ All pre-push checks passed!${NC}"

@@ -1,95 +1,16 @@
 [package]
 name = "bounty-challenge"
-version = "0.1.0"
+version = "2.0.0"
 edition = "2021"
-description = "Bounty Challenge - Reward miners for valid GitHub issues"
+description = "Bounty Challenge – WASM evaluation module for Platform Network"
 authors = ["CortexLM"]
 license = "Apache-2.0"
 repository = "https://github.com/PlatformNetwork/bounty-challenge"
 
-[[bin]]
-name = "bounty-server"
-path = "src/main.rs"
-
-[[bin]]
-name = "bounty"
-path = "src/bin/bounty/main.rs"
-
-[[bin]]
-name = "bounty-health-server"
-path = "src/bin/bounty-health-server.rs"
+[lib]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-# Platform SDK
-platform-challenge-sdk = { git = "https://github.com/PlatformNetwork/platform.git", rev = "c09cd79", features = ["http-server"] }
-platform-core = { git = "https://github.com/PlatformNetwork/platform.git", rev = "c09cd79" }
-
-# Async runtime
-tokio = { version = "1.40", features = ["full"] }
-async-trait = "0.1"
-futures = "0.3"
-
-# HTTP client for GitHub API
-reqwest = { version = "0.12", features = ["json"] }
-
-# Serialization
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-
-# Utils
-uuid = { version = "1.10", features = ["v4", "serde"] }
-chrono = { version = "0.4", features = ["serde"] }
-sha2 = "0.10"
-blake2 = "0.10"
-hex = "0.4"
-bs58 = "0.5"
-
-# Error handling
-anyhow = "1.0"
-thiserror = "2.0"
-
-# Logging
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-
-# PostgreSQL
-tokio-postgres = { version = "0.7", features = ["with-chrono-0_4", "with-serde_json-1"] }
-deadpool-postgres = "0.14"
-postgres-types = { version = "0.2", features = ["derive"] }
-
-# CLI
-clap = { version = "4.5", features = ["derive", "env"] }
-
-# Interactive CLI (like term-challenge)
-dialoguer = { version = "0.11", features = ["password"] }
-console = "0.15"
-indicatif = "0.17"
-colored = "2.1"
-
-# Web server
-axum = { version = "0.7", features = ["json"] }
-tower-http = { version = "0.6", features = ["cors"] }
-
-# Crypto (SS58, sr25519)
-sp-core = { version = "31.0", default-features = false, features = ["std"] }
-
-# URL encoding
-urlencoding = "2.1"
-
-# Thread-safe locks
-parking_lot = "0.12"
-
-# Lazy static
-lazy_static = "1.4"
-
-# Random
-rand = "0.8"
-
-# Open browser
-open = "5.0"
-
-# Config
-toml = "0.8"
-
-[dev-dependencies]
-tokio-test = "0.4"
+platform-challenge-sdk-wasm = { path = "../platform-v2/crates/challenge-sdk-wasm" }
+serde = { version = "1.0", default-features = false, features = ["derive", "alloc"] }
+bincode = { version = "1.3", default-features = false }

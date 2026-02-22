@@ -48,11 +48,7 @@ pub fn propose_issue_validity(
     false
 }
 
-pub fn check_issue_consensus(
-    issue_number: u32,
-    repo_owner: &str,
-    repo_name: &str,
-) -> Option<bool> {
+pub fn check_issue_consensus(issue_number: u32, repo_owner: &str, repo_name: &str) -> Option<bool> {
     let proposals: Vec<IssueValidityProposal> = host_storage_get(ISSUE_PROPOSALS_KEY)
         .ok()
         .and_then(|d| {
@@ -67,9 +63,7 @@ pub fn check_issue_consensus(
     let relevant: Vec<&IssueValidityProposal> = proposals
         .iter()
         .filter(|p| {
-            p.issue_number == issue_number
-                && p.repo_owner == repo_owner
-                && p.repo_name == repo_name
+            p.issue_number == issue_number && p.repo_owner == repo_owner && p.repo_name == repo_name
         })
         .collect();
 

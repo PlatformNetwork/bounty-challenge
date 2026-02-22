@@ -46,19 +46,12 @@ pub fn validate_issue(issue: &IssueRecord, expected_author: &str) -> (bool, Opti
     (true, None)
 }
 
-pub fn process_claims(
-    submission: &BountySubmission,
-    synced_issues: &[IssueRecord],
-) -> ClaimResult {
+pub fn process_claims(submission: &BountySubmission, synced_issues: &[IssueRecord]) -> ClaimResult {
     let mut claimed = Vec::new();
     let mut rejected = Vec::new();
 
     for &issue_number in &submission.issue_numbers {
-        if storage::is_issue_recorded(
-            &submission.repo_owner,
-            &submission.repo_name,
-            issue_number,
-        ) {
+        if storage::is_issue_recorded(&submission.repo_owner, &submission.repo_name, issue_number) {
             rejected.push(RejectedIssue {
                 issue_number,
                 reason: String::from("Issue already claimed"),
@@ -66,18 +59,15 @@ pub fn process_claims(
             continue;
         }
 
-        let issue = synced_issues
-            .iter()
-            .find(|i| {
-                i.issue_number == issue_number
-                    && i.repo_owner == submission.repo_owner
-                    && i.repo_name == submission.repo_name
-            });
+        let issue = synced_issues.iter().find(|i| {
+            i.issue_number == issue_number
+                && i.repo_owner == submission.repo_owner
+                && i.repo_name == submission.repo_name
+        });
 
         match issue {
             Some(issue_record) => {
-                let (valid, reason) =
-                    validate_issue(issue_record, &submission.github_username);
+                let (valid, reason) = validate_issue(issue_record, &submission.github_username);
 
                 if valid {
                     let recorded = storage::record_valid_issue(
@@ -113,10 +103,8 @@ pub fn process_claims(
     }
 
     let balance = storage::get_user_balance(&submission.hotkey);
-    let score = crate::scoring::calculate_weight_from_points(
-        balance.valid_count,
-        balance.star_count,
-    );
+    let score =
+        crate::scoring::calculate_weight_from_points(balance.valid_count, balance.star_count);
 
     ClaimResult {
         claimed,

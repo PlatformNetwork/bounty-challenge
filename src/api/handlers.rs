@@ -5,8 +5,8 @@ use platform_challenge_sdk_wasm::host_functions::host_consensus_get_submission_c
 use platform_challenge_sdk_wasm::{WasmRouteRequest, WasmRouteResponse};
 
 use crate::types::{
-    BountySubmission, IssueRecord,
-    RegisterRequest, StatsResponse, StatusResponse, TimeoutConfig, UserBalance,
+    BountySubmission, IssueRecord, RegisterRequest, StatsResponse, StatusResponse, TimeoutConfig,
+    UserBalance,
 };
 use crate::{consensus, scoring, storage, validation};
 
@@ -127,16 +127,12 @@ pub fn handle_register(request: &WasmRouteRequest) -> WasmRouteResponse {
         return bad_request_response();
     }
 
-    let reg: RegisterRequest =
-        match bincode_options_route_body().deserialize(&request.body) {
-            Ok(r) => r,
-            Err(_) => return bad_request_response(),
-        };
+    let reg: RegisterRequest = match bincode_options_route_body().deserialize(&request.body) {
+        Ok(r) => r,
+        Err(_) => return bad_request_response(),
+    };
 
-    let hotkey = request
-        .auth_hotkey
-        .as_deref()
-        .unwrap_or(&reg.hotkey);
+    let hotkey = request.auth_hotkey.as_deref().unwrap_or(&reg.hotkey);
 
     let result = storage::register_user(&reg.github_username, hotkey);
     if result {
@@ -153,11 +149,11 @@ pub fn handle_claim(request: &WasmRouteRequest) -> WasmRouteResponse {
         return bad_request_response();
     }
 
-    let submission: BountySubmission =
-        match bincode_options_route_body().deserialize(&request.body) {
-            Ok(s) => s,
-            Err(_) => return bad_request_response(),
-        };
+    let submission: BountySubmission = match bincode_options_route_body().deserialize(&request.body)
+    {
+        Ok(s) => s,
+        Err(_) => return bad_request_response(),
+    };
 
     if !validation::validate_submission(&submission) {
         return bad_request_response();
@@ -309,18 +305,17 @@ pub fn handle_issue_consensus(request: &WasmRouteRequest) -> WasmRouteResponse {
 }
 
 pub fn handle_get_timeout_config(_request: &WasmRouteRequest) -> WasmRouteResponse {
-    let config: TimeoutConfig = platform_challenge_sdk_wasm::host_functions::host_storage_get(
-        b"timeout_config",
-    )
-    .ok()
-    .and_then(|d| {
-        if d.is_empty() {
-            None
-        } else {
-            bincode::deserialize(&d).ok()
-        }
-    })
-    .unwrap_or_default();
+    let config: TimeoutConfig =
+        platform_challenge_sdk_wasm::host_functions::host_storage_get(b"timeout_config")
+            .ok()
+            .and_then(|d| {
+                if d.is_empty() {
+                    None
+                } else {
+                    bincode::deserialize(&d).ok()
+                }
+            })
+            .unwrap_or_default();
     ok_response(bincode::serialize(&config).unwrap_or_default())
 }
 

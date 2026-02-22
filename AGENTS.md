@@ -4,244 +4,124 @@ This document provides guidelines for developers and AI agents working on the Bo
 
 ## Project Overview
 
-Bounty Challenge is a decentralized issue reward system on the Bittensor network. Miners earn TAO rewards by discovering and reporting valid issues.
+Bounty Challenge is a WASM evaluation module for Platform Network. It runs inside the validator's WASM runtime (`wasm32-unknown-unknown`) and handles evaluation, validation, routing, and weight calculation on-chain. Miners earn rewards by discovering and reporting valid GitHub issues.
+
+### Architecture
+
+This is a `no_std` WASM crate that implements the `Challenge` trait from `platform-challenge-sdk-wasm`. The platform-v2 validator loads the compiled `.wasm` binary and invokes exported functions. All state is stored via host-provided key/value storage.
 
 ### Key Components
 
-| Component | Path | Description |
-|-----------|------|-------------|
-| **Server** | `src/main.rs` | HTTP server entry point |
-| **Challenge** | `src/challenge.rs` | Core challenge implementation |
-| **Storage** | `src/pg_storage.rs` | PostgreSQL data layer |
-| **Auth** | `src/auth.rs` | SS58/sr25519 signature verification |
-| **GitHub API** | `src/github.rs` | GitHub API client |
-| **GitHub CLI** | `src/gh_cli.rs` | `gh` CLI wrapper for reliable sync |
-| **GitHub OAuth** | `src/github_oauth.rs` | GitHub Device Flow OAuth |
-| **Config** | `src/config.rs` | Configuration loading |
-| **Server Routes** | `src/server.rs` | HTTP routes and handlers |
-| **Metagraph** | `src/metagraph.rs` | Metagraph caching |
-| **CLI** | `src/bin/bounty/` | Command-line interface |
-| **Health Server** | `src/bin/bounty-health-server.rs` | Standalone health check server |
-| **WASM Module** | `wasm/` | On-chain WASM evaluation module |
-
-### WASM Module (`wasm/`)
-
-The `wasm/` directory contains a standalone `no_std` WASM module that implements the `Challenge` trait from `platform-challenge-sdk-wasm`. It runs inside the validator's WASM runtime and handles evaluation, validation, routing, and weight calculation on-chain.
-
 | File | Description |
 |------|-------------|
-| `wasm/Cargo.toml` | Crate config (`cdylib` + `rlib` targets) |
-| `wasm/src/lib.rs` | `BountyChallengeWasm` – `Challenge` trait impl |
-| `wasm/src/types.rs` | Domain types: `BountySubmission`, `IssueRecord`, `UserRegistration`, `LeaderboardEntry`, etc. |
-| `wasm/src/storage/bounty_storage.rs` | On-chain key/value storage via `host_storage_get/set` |
-| `wasm/src/scoring.rs` | Weight calculation (`WEIGHT_PER_POINT = 0.02`, `STAR_BONUS_PER_REPO = 0.25`) |
-| `wasm/src/consensus.rs` | Validator consensus for issue validity and sync data |
-| `wasm/src/validation.rs` | Issue validation and claim processing |
-| `wasm/src/api/handlers.rs` | Route handlers (leaderboard, stats, register, claim, etc.) |
-| `wasm/src/routes.rs` | Route definitions and request dispatch |
+| `src/lib.rs` | `BountyChallengeWasm` – `Challenge` trait implementation |
+| `src/types.rs` | Domain types: `BountySubmission`, `IssueRecord`, `UserRegistration`, `LeaderboardEntry`, etc. |
+| `src/storage/bounty_storage.rs` | On-chain key/value storage via `host_storage_get/set` |
+| `src/scoring.rs` | Weight calculation (`WEIGHT_PER_POINT = 0.02`, `STAR_BONUS_PER_REPO = 0.25`) |
+| `src/consensus.rs` | Validator consensus for issue validity and sync data |
+| `src/validation.rs` | Issue validation and claim processing |
+| `src/api/handlers.rs` | Route handlers (leaderboard, stats, register, claim, etc.) |
+| `src/routes.rs` | Route definitions and request dispatch |
 
-**Building:**
+### Storage Key Patterns
+
+`user:<hotkey>`, `github:<username>`, `issue:<owner>/<repo>:<number>`, `balance:<hotkey>`, `leaderboard`, `registered_hotkeys`, `synced_issues`, `timeout_config`
+
+## Building
 
 ```bash
-cd wasm && cargo build --release --target wasm32-unknown-unknown
-```
+# Build WASM module
+cargo build --release --target wasm32-unknown-unknown
 
-**Storage key patterns:** `user:<hotkey>`, `github:<username>`, `issue:<owner>/<repo>:<number>`, `balance:<hotkey>`, `leaderboard`, `registered_hotkeys`, `synced_issues`
+# Output: target/wasm32-unknown-unknown/release/bounty_challenge.wasm
+```
 
 ## Coding Guidelines
 
-### Rust Best Practices
+### Rust / WASM Constraints
 
-1. **Error Handling**
-   - Use `Result` types and the `?` operator for propagation
-   - Use `unwrap_or_else` with fallbacks, never bare `unwrap()` in production code
-   - Log errors with `tracing` before returning them
+1. **`#![no_std]`** – No standard library. Use `alloc` for `String`, `Vec`, etc.
+2. **No I/O** – All storage and network access goes through `platform-challenge-sdk-wasm` host functions.
+3. **Serialization** – Use `bincode` with size limits (`bincode::DefaultOptions::new().with_limit(...)`) for all deserialization.
+4. **Error Handling** – Return `EvaluationOutput::failure(msg)` or empty `Vec` on errors. Never panic.
+5. **No `unwrap()` in production paths** – Use `unwrap_or_default()`, `unwrap_or_else()`, or match.
 
-2. **Async Code**
-   - All database and network operations are async
-   - Use `tokio` runtime with `async-trait` for trait implementations
-   - Respect timeouts (30s default for DB queries)
+### Platform SDK Integration
 
-3. **Security**
-   - Never hardcode secrets - use environment variables
-   - All user inputs must be validated before use
-   - Use parameterized SQL queries only
+The crate depends on `platform-challenge-sdk-wasm` (local path: `../platform-v2/crates/challenge-sdk-wasm`).
+
+Key traits and types:
+- `Challenge` trait: `name()`, `version()`, `evaluate()`, `validate()`, `routes()`, `handle_route()`, `get_weights()`
+- `register_challenge!` macro: exports WASM ABI functions
+- Host functions: `host_storage_get()`, `host_storage_set()`, `host_consensus_get_epoch()`, `host_consensus_get_submission_count()`
 
 ### Project Structure
 
 ```
 bounty-challenge/
+├── Cargo.toml               # WASM crate config (cdylib + rlib)
+├── Cargo.lock               # Dependency lockfile
 ├── src/
-│   ├── main.rs              # Server entry point
-│   ├── lib.rs               # Library exports
-│   ├── auth.rs              # Signature verification
-│   ├── challenge.rs         # Challenge implementation
-│   ├── config.rs            # Configuration loading
-│   ├── server.rs            # HTTP routes and handlers
-│   ├── pg_storage.rs        # PostgreSQL storage
-│   ├── github.rs            # GitHub API client
-│   ├── gh_cli.rs            # GitHub CLI (gh) wrapper
-│   ├── github_oauth.rs      # GitHub Device Flow OAuth
-│   ├── metagraph.rs         # Metagraph caching
-│   └── bin/
-│       ├── bounty/          # CLI application
-│       │   ├── main.rs      # CLI entry point
-│       │   ├── client.rs    # Bridge API client
-│       │   ├── style.rs     # Terminal styling
-│       │   ├── wizard/      # Registration wizard
-│       │   └── commands/    # CLI commands (config, info, leaderboard, server, status, validate)
-│       └── bounty-health-server.rs  # Health check server
-├── migrations/              # SQL migrations (001–018)
-├── scripts/
-│   └── setup.sh             # Setup script
-├── docs/
-│   ├── anti-abuse.md        # Anti-abuse documentation
-│   ├── miner/               # Miner guides
-│   ├── reference/           # API & scoring references
-│   └── validator/           # Validator guides
-├── examples/                # Example code
-├── config.toml              # Configuration file
-└── Dockerfile               # Container build
+│   ├── lib.rs               # Challenge trait impl + register_challenge! macro
+│   ├── types.rs             # Domain types
+│   ├── scoring.rs           # Weight calculation
+│   ├── consensus.rs         # Validator consensus
+│   ├── validation.rs        # Issue validation and claim processing
+│   ├── routes.rs            # Route definitions and dispatch
+│   ├── api/
+│   │   ├── mod.rs           # API module
+│   │   └── handlers.rs      # Route handlers
+│   └── storage/
+│       ├── mod.rs           # Storage module
+│       └── bounty_storage.rs # Key/value storage operations
+├── .github/
+│   └── workflows/
+│       ├── ci.yml           # CI: build + clippy for wasm32
+│       ├── protect-valid-label.yml  # Label protection
+│       └── version-check.yml       # Issue version check
+├── docs/                    # Documentation
+├── assets/                  # Static assets
+├── LICENSE
+└── README.md
 ```
 
-### Configuration
+### API Routes
 
-Configuration is loaded from `config.toml`:
-- `[github]` - OAuth client ID and target repositories
-- `[server]` - Host and port bindings
-- `[database]` - PostgreSQL settings (uses `DATABASE_URL` env var)
-- `[rewards]` - Points system parameters (`max_points_for_full_weight`, `weight_per_point`, `valid_label`)
-
-Environment variables take precedence:
-- `DATABASE_URL` - PostgreSQL connection string
-- `GITHUB_TOKEN` - API authentication
-- `PLATFORM_URL` - Platform server URL
-- `GITHUB_CLIENT_ID` - OAuth client ID override
-
-### Testing
-
-```bash
-# Run all tests
-cargo test
-
-# Run with logging
-RUST_LOG=debug cargo test
-
-# Check code quality
-cargo clippy
-cargo fmt --check
-```
-
-### Building
-
-```bash
-# Development build
-cargo build
-
-# Release build
-cargo build --release
-
-# Docker build
-docker build -t bounty-challenge .
-```
-
-## API Endpoints
-
-### Platform SDK Endpoints
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/health` | Health check |
-| GET | `/config` | Challenge configuration |
-| POST | `/evaluate` | Evaluate miner submissions |
-| POST | `/validate` | Validate submissions |
-| GET | `/leaderboard` | Current standings |
-| GET | `/get_weights` | Platform-compatible weight calculation |
-
-### Direct Access Endpoints
-
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/register` | Register GitHub account with hotkey |
-| GET | `/status/:hotkey` | Get miner status |
-| GET | `/stats` | Challenge statistics |
-| POST | `/invalid` | Record an invalid issue |
-| GET | `/issues` | List issues (with `state`, `label`, `limit`, `offset` query params) |
-| GET | `/issues/pending` | List pending issues |
-| GET | `/issues/stats` | Issue statistics |
-| GET | `/hotkey/:hotkey` | Detailed hotkey info (also accepts GitHub username) |
-| GET | `/github/:username` | GitHub user details |
-| GET | `/sync/status` | Sync status for repos |
-| POST | `/sync/trigger` | Trigger manual sync (authenticated) |
-
-All direct access endpoints are also available under `/api/v1/` prefix for platform bridge compatibility.
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/leaderboard` | No | Current standings |
+| GET | `/stats` | No | Challenge statistics |
+| GET | `/status/:hotkey` | No | Hotkey status |
+| POST | `/register` | Yes | Register GitHub username |
+| POST | `/claim` | Yes | Claim bounty for issues |
+| GET | `/issues` | No | List synced issues |
+| GET | `/issues/pending` | No | List pending issues |
+| GET | `/hotkey/:hotkey` | No | Detailed hotkey info |
+| POST | `/invalid` | Yes | Record invalid issue |
+| POST | `/sync/propose` | Yes | Propose sync data |
+| GET | `/sync/consensus` | No | Check sync consensus |
+| POST | `/issue/propose` | Yes | Propose issue validity |
+| POST | `/issue/consensus` | No | Check issue consensus |
+| GET | `/config/timeout` | No | Get timeout config |
+| POST | `/config/timeout` | Yes | Set timeout config |
+| GET | `/get_weights` | No | Weight assignments |
 
 ### Weight Calculation
 
-Points are calculated as:
 - 1 point per valid issue
-- 0.25 points per starred repository (no cap)
-- Separate penalties: `max(0, invalid_count - valid_count) + max(0, duplicate_count - valid_count)`
+- 0.25 points per starred repository
+- Weight = `net_points × 0.02`
+- Weights are normalized to sum to 1.0
 
-Weight formula: `net_points × 0.02` (raw weight, no cap per user). Weights are normalized to sum to 1.0 at the API level when served via `/get_weights`.
+### Code Quality
 
-## Database Schema
+```bash
+# Format
+cargo fmt
 
-Key tables:
-- `github_registrations` - Hotkey ↔ GitHub username mappings
-- `resolved_issues` - Valid issues credited to miners
-- `invalid_issues` - Invalid issues (for penalty tracking)
-- `duplicate_issues` - Duplicate issue tracking (for penalty)
-- `target_repos` - Repositories to monitor
-- `github_issues` - Cached GitHub issues
-- `github_sync_state` - Sync state per repository
-- `github_stars` - User star tracking
-- `star_target_repos` - Repos tracked for star bonuses
-- `admin_bonuses` - Admin-granted bonus points
-- `project_tags` - Project tag metadata
-- `reward_snapshots` - Historical weight snapshots
-- `daily_stats` - Aggregated daily statistics
-- `schema_migrations` - Migration version tracking
+# Lint (must target wasm32)
+cargo clippy --target wasm32-unknown-unknown
 
-## CLI Commands
-
-The `bounty` binary supports these subcommands:
-
-| Command | Aliases | Description |
-|---------|---------|-------------|
-| `wizard` | `w`, `register`, `r` | Interactive registration wizard (default) |
-| `server` | `s` | Run as server (for subnet operators) |
-| `validate` | `v` | Run as validator (auto-discovers bounties) |
-| `leaderboard` | `lb` | View the leaderboard |
-| `status` | `st` | Check your status and bounties |
-| `config` | — | Show challenge configuration |
-| `info` | `i` | Display system information for bug reports |
-
-## Common Tasks
-
-### Adding a New Endpoint
-
-1. Define handler function in `src/server.rs`
-2. Add route in `create_router()`
-3. Update API documentation in `docs/reference/api-reference.md`
-
-### Modifying Storage
-
-1. Create new migration in `migrations/` (next sequential number)
-2. Update `PgStorage` methods in `src/pg_storage.rs`
-3. Add migration check in `run_migrations()`
-
-### Updating CLI
-
-1. Add command variant to `Commands` enum in `src/bin/bounty/main.rs`
-2. Implement handler in `src/bin/bounty/commands/`
-3. Register module in `src/bin/bounty/commands/mod.rs`
-4. Update CLI documentation in README
-
-## Security Considerations
-
-- All signatures use sr25519 (Substrate standard)
-- Timestamps must be within 5 minutes (replay protection)
-- Each GitHub username can only link to one hotkey
-- Each hotkey can only link to one GitHub username
-- Only maintainers can add the `valid` label
+# Check
+cargo check --target wasm32-unknown-unknown
+```

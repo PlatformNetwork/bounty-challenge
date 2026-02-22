@@ -64,9 +64,7 @@ pub fn get_route_definitions() -> Vec<WasmRouteDefinition> {
         WasmRouteDefinition {
             method: String::from("POST"),
             path: String::from("/sync/propose"),
-            description: String::from(
-                "Propose synced issue data for consensus (requires auth)",
-            ),
+            description: String::from("Propose synced issue data for consensus (requires auth)"),
             requires_auth: true,
         },
         WasmRouteDefinition {
@@ -78,9 +76,7 @@ pub fn get_route_definitions() -> Vec<WasmRouteDefinition> {
         WasmRouteDefinition {
             method: String::from("POST"),
             path: String::from("/issue/propose"),
-            description: String::from(
-                "Propose issue validity for consensus (requires auth)",
-            ),
+            description: String::from("Propose issue validity for consensus (requires auth)"),
             requires_auth: true,
         },
         WasmRouteDefinition {

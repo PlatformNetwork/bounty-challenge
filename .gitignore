@@ -3,11 +3,6 @@
 **/target/
 **/*.rs.bk
 
-# Database
-*.db
-*.db-shm
-*.db-wal
-
 # IDE
 .idea/
 .vscode/
@@ -27,7 +22,3 @@ Thumbs.db
 # Logs
 *.log
 logs/
-
-# Test artifacts
-/test-output/
-/coverage/

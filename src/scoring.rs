@@ -32,9 +32,7 @@ pub fn calculate_net_points(valid_count: u32, invalid_count: u32, star_count: u3
     (issue_points + star_points - penalty).max(0.0)
 }
 
-pub fn calculate_weights_from_leaderboard(
-    entries: &[LeaderboardEntry],
-) -> Vec<WeightAssignment> {
+pub fn calculate_weights_from_leaderboard(entries: &[LeaderboardEntry]) -> Vec<WeightAssignment> {
     let mut weights: Vec<WeightAssignment> = entries
         .iter()
         .filter(|e| !e.is_penalized && e.score > 0.0)
@@ -66,8 +64,7 @@ pub fn rebuild_leaderboard() {
 
     for hotkey in &hotkeys {
         let balance = storage::get_user_balance(hotkey);
-        let github_username = storage::get_github_by_hotkey(hotkey)
-            .unwrap_or_default();
+        let github_username = storage::get_github_by_hotkey(hotkey).unwrap_or_default();
 
         let net_points = calculate_net_points(
             balance.valid_count,

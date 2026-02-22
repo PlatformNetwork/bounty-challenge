@@ -51,25 +51,13 @@ pub struct InvalidIssueRecord {
     pub recorded_epoch: u64,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct UserBalance {
     pub valid_count: u32,
     pub invalid_count: u32,
     pub duplicate_count: u32,
     pub star_count: u32,
     pub is_penalized: bool,
-}
-
-impl Default for UserBalance {
-    fn default() -> Self {
-        Self {
-            valid_count: 0,
-            invalid_count: 0,
-            duplicate_count: 0,
-            star_count: 0,
-            is_penalized: false,
-        }
-    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
