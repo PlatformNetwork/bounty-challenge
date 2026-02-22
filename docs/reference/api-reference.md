@@ -4,13 +4,19 @@ Complete API documentation for Bounty Challenge.
 
 ## Base URL
 
-All requests go through the Platform Network validator bridge:
+All requests go through the Platform Network validator chain RPC:
 
+**HTTP REST:**
 ```
-https://chain.platform.network/api/v1/bridge/bounty-challenge/
+http://VALIDATOR_IP:8080/challenge/bounty-challenge/
 ```
 
-> **Note**: The WASM module uses bincode serialization internally. The Platform bridge handles JSON ↔ bincode translation for external HTTP clients.
+**JSON-RPC:**
+```
+POST http://VALIDATOR_IP:8080/rpc
+```
+
+> **Note**: The WASM module uses bincode serialization internally. The Platform validator handles JSON ↔ bincode translation for external clients.
 
 ---
 
@@ -18,7 +24,7 @@ https://chain.platform.network/api/v1/bridge/bounty-challenge/
 
 ### Signature-Based Authentication
 
-Routes marked as requiring auth need a valid `auth_hotkey` provided by the Platform bridge. The bridge verifies sr25519 signatures before forwarding requests to the WASM module.
+Routes marked as requiring auth need a valid sr25519 signature. The validator verifies signatures before forwarding requests to the WASM module.
 
 ```
 message = "{action}:{data}:{timestamp}"
@@ -30,6 +36,41 @@ signature = sr25519_sign(message, secret_key)
 - Timestamps must be within **5 minutes** of server time
 - Uses Unix timestamps (seconds since epoch)
 - Prevents replay attacks
+
+---
+
+## JSON-RPC Format
+
+All routes can be accessed via the `challenge_call` JSON-RPC method:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "challenge_call",
+  "params": {
+    "challengeId": "bounty-challenge",
+    "method": "GET",
+    "path": "/leaderboard",
+    "body": null,
+    "query": {}
+  },
+  "id": 1
+}
+```
+
+**Response format:**
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "challengeId": "bounty-challenge",
+    "status": 200,
+    "headers": {},
+    "body": { ... }
+  },
+  "id": 1
+}
+```
 
 ---
 
@@ -430,25 +471,47 @@ import requests
 import time
 from substrateinterface import Keypair
 
-# Create keypair from seed
-keypair = Keypair.create_from_mnemonic("your mnemonic here")
+VALIDATOR_RPC = "http://VALIDATOR_IP:8080"
 
-# Prepare registration
+# Get leaderboard (HTTP REST)
+response = requests.get(f"{VALIDATOR_RPC}/challenge/bounty-challenge/leaderboard")
+print(response.json())
+
+# Get leaderboard (JSON-RPC)
+response = requests.post(f"{VALIDATOR_RPC}/rpc", json={
+    "jsonrpc": "2.0",
+    "method": "challenge_call",
+    "params": {
+        "challengeId": "bounty-challenge",
+        "method": "GET",
+        "path": "/leaderboard"
+    },
+    "id": 1
+})
+print(response.json())
+
+# Register (JSON-RPC)
+keypair = Keypair.create_from_mnemonic("your mnemonic here")
 timestamp = int(time.time())
 message = f"register_github:johndoe:{timestamp}"
 signature = keypair.sign(message.encode()).hex()
 
-# Register
-response = requests.post(
-    "https://chain.platform.network/api/v1/bridge/bounty-challenge/register",
-    json={
-        "hotkey": keypair.ss58_address,
-        "github_username": "johndoe",
-        "signature": f"0x{signature}",
-        "timestamp": timestamp
-    }
-)
-
+response = requests.post(f"{VALIDATOR_RPC}/rpc", json={
+    "jsonrpc": "2.0",
+    "method": "challenge_call",
+    "params": {
+        "challengeId": "bounty-challenge",
+        "method": "POST",
+        "path": "/register",
+        "body": {
+            "hotkey": keypair.ss58_address,
+            "github_username": "johndoe",
+            "signature": f"0x{signature}",
+            "timestamp": timestamp
+        }
+    },
+    "id": 1
+})
 print(response.json())
 ```
 
@@ -458,6 +521,15 @@ print(response.json())
 const { Keyring } = require('@polkadot/keyring');
 const { u8aToHex } = require('@polkadot/util');
 
+const VALIDATOR_RPC = 'http://VALIDATOR_IP:8080';
+
+// Get leaderboard (HTTP REST)
+const leaderboard = await fetch(
+    `${VALIDATOR_RPC}/challenge/bounty-challenge/leaderboard`
+);
+console.log(await leaderboard.json());
+
+// Register (JSON-RPC)
 async function register(mnemonic, githubUsername) {
     const keyring = new Keyring({ type: 'sr25519' });
     const pair = keyring.addFromMnemonic(mnemonic);
@@ -466,20 +538,53 @@ async function register(mnemonic, githubUsername) {
     const message = `register_github:${githubUsername.toLowerCase()}:${timestamp}`;
     const signature = pair.sign(message);
     
-    const response = await fetch(
-        'https://chain.platform.network/api/v1/bridge/bounty-challenge/register',
-        {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                hotkey: pair.address,
-                github_username: githubUsername,
-                signature: u8aToHex(signature),
-                timestamp: timestamp
-            })
-        }
-    );
+    const response = await fetch(`${VALIDATOR_RPC}/rpc`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            jsonrpc: '2.0',
+            method: 'challenge_call',
+            params: {
+                challengeId: 'bounty-challenge',
+                method: 'POST',
+                path: '/register',
+                body: {
+                    hotkey: pair.address,
+                    github_username: githubUsername,
+                    signature: u8aToHex(signature),
+                    timestamp: timestamp
+                }
+            },
+            id: 1
+        })
+    });
     
     console.log(await response.json());
 }
+```
+
+### Using the CLI
+
+```bash
+# Build
+cargo build --release -p bounty-cli
+
+# Leaderboard
+./target/release/bounty-cli leaderboard --rpc-url http://VALIDATOR_IP:8080
+
+# Register
+./target/release/bounty-cli register \
+  --hotkey 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY \
+  --github johndoe \
+  --signature 0xabc123...def456 \
+  --timestamp 1705590000 \
+  --rpc-url http://VALIDATOR_IP:8080
+
+# Status
+./target/release/bounty-cli status \
+  --hotkey 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY \
+  --rpc-url http://VALIDATOR_IP:8080
+
+# Stats
+./target/release/bounty-cli stats --rpc-url http://VALIDATOR_IP:8080
 ```

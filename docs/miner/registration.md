@@ -1,180 +1,137 @@
 # Registration Guide
 
-This guide explains how to register your GitHub account with your miner hotkey.
+This guide explains how to register your GitHub username with your Bittensor hotkey on the Bounty Challenge.
 
 ## Overview
 
-Registration links your GitHub username to your Bittensor hotkey. This allows the system to:
-1. Verify that issues you create belong to you
-2. Credit rewards to your hotkey
-3. Prevent impersonation
+Registration links your on-chain Bittensor hotkey to your GitHub username. This is required before you can earn rewards for submitting valid issues.
 
-## Registration via Platform Bridge API
+## Registration Steps
 
-Send a signed POST request to the registration endpoint:
+### 1. Prepare Your Signature
 
-```
-POST https://chain.platform.network/api/v1/bridge/bounty-challenge/register
-```
-
-### Request Body
-
-```json
-{
-  "hotkey": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
-  "github_username": "johndoe",
-  "signature": "0x...",
-  "timestamp": 1705590000
-}
-```
-
-### Signature Message Format
+The registration requires an sr25519 signature proving you own the hotkey. Sign the following message:
 
 ```
-register_github:{github_username_lowercase}:{timestamp}
+register_github:{github_username_lowercase}:{unix_timestamp}
 ```
 
-The signature must be an **sr25519** signature using the secret key corresponding to your hotkey.
+For example, if your GitHub username is `JohnDoe` and the current timestamp is `1705590000`:
 
-## Code Examples
+```
+register_github:johndoe:1705590000
+```
 
-### Python
+> **Note**: The username in the message must be **lowercase**, regardless of your actual GitHub username casing.
+
+### 2. Register via CLI
+
+```bash
+./target/release/bounty-cli register \
+  --hotkey 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY \
+  --github JohnDoe \
+  --signature 0xabc123...def456 \
+  --timestamp 1705590000 \
+  --rpc-url http://VALIDATOR_IP:8080
+```
+
+### 3. Verify Registration
+
+```bash
+./target/release/bounty-cli status \
+  --hotkey 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY \
+  --rpc-url http://VALIDATOR_IP:8080
+```
+
+## Generating the Signature
+
+### Python (using substrate-interface)
 
 ```python
-import requests
 import time
 from substrateinterface import Keypair
 
-# Create keypair from seed
 keypair = Keypair.create_from_mnemonic("your mnemonic here")
 
-# Prepare registration
 timestamp = int(time.time())
 message = f"register_github:johndoe:{timestamp}"
 signature = keypair.sign(message.encode()).hex()
 
-# Register
-response = requests.post(
-    "https://chain.platform.network/api/v1/bridge/bounty-challenge/register",
-    json={
-        "hotkey": keypair.ss58_address,
-        "github_username": "johndoe",
-        "signature": f"0x{signature}",
-        "timestamp": timestamp
-    }
-)
-
-print(response.json())
+print(f"Hotkey:    {keypair.ss58_address}")
+print(f"Signature: 0x{signature}")
+print(f"Timestamp: {timestamp}")
 ```
 
-### JavaScript
+### JavaScript (using @polkadot/keyring)
 
 ```javascript
 const { Keyring } = require('@polkadot/keyring');
 const { u8aToHex } = require('@polkadot/util');
 
-async function register(mnemonic, githubUsername) {
-    const keyring = new Keyring({ type: 'sr25519' });
-    const pair = keyring.addFromMnemonic(mnemonic);
-    
-    const timestamp = Math.floor(Date.now() / 1000);
-    const message = `register_github:${githubUsername.toLowerCase()}:${timestamp}`;
-    const signature = pair.sign(message);
-    
-    const response = await fetch(
-        'https://chain.platform.network/api/v1/bridge/bounty-challenge/register',
-        {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                hotkey: pair.address,
-                github_username: githubUsername,
-                signature: u8aToHex(signature),
-                timestamp: timestamp
-            })
-        }
-    );
-    
-    console.log(await response.json());
-}
+const keyring = new Keyring({ type: 'sr25519' });
+const pair = keyring.addFromMnemonic('your mnemonic here');
+
+const timestamp = Math.floor(Date.now() / 1000);
+const message = `register_github:johndoe:${timestamp}`;
+const signature = pair.sign(message);
+
+console.log(`Hotkey:    ${pair.address}`);
+console.log(`Signature: ${u8aToHex(signature)}`);
+console.log(`Timestamp: ${timestamp}`);
 ```
 
-## Secret Key Formats
+## Direct API Registration
 
-The following key formats are supported by standard Substrate libraries:
+You can also register directly via the chain RPC without the CLI:
 
-### 64-Character Hex Seed
+### Using curl (HTTP REST)
 
-```
-a1b2c3d4e5f6789012345678901234567890123456789012345678901234abcd
-```
-
-This is a 32-byte seed encoded as hexadecimal.
-
-### 12+ Word Mnemonic
-
-```
-abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about
-```
-
-Standard BIP-39 mnemonic phrase.
-
-### SURI Format (Testing Only)
-
-```
-//Alice
-//Bob
+```bash
+curl -X POST http://VALIDATOR_IP:8080/challenge/bounty-challenge/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "hotkey": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    "github_username": "JohnDoe",
+    "signature": "0xabc123...def456",
+    "timestamp": 1705590000
+  }'
 ```
 
-Substrate URI format, useful for testing with well-known keys.
+### Using JSON-RPC
 
-## Signature Verification
-
-### How It Works
-
-1. **Message Creation**: `register_github:{username}:{timestamp}`
-2. **Signing**: sr25519 signature using your secret key
-3. **Verification**: The Platform bridge verifies the signature matches the claimed hotkey
-
-### Security
-
-- **Timestamp**: Must be within 5 minutes (prevents replay attacks)
-- **Username**: Lowercase for consistency
-- **One-to-one mapping**: Each hotkey maps to one GitHub username, and vice versa
-
-## Changing Registration
-
-### Change GitHub Username
-
-To link a different GitHub username:
-1. Send a new registration request with the same hotkey
-2. Enter the new GitHub username
-3. The old link is replaced
-
-### Change Hotkey
-
-To link your GitHub to a different hotkey:
-1. Contact support (username can only link to one hotkey)
-2. Or create a new GitHub account
+```bash
+curl -X POST http://VALIDATOR_IP:8080/rpc \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "challenge_call",
+    "params": {
+      "challengeId": "bounty-challenge",
+      "method": "POST",
+      "path": "/register",
+      "body": {
+        "hotkey": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+        "github_username": "JohnDoe",
+        "signature": "0xabc123...def456",
+        "timestamp": 1705590000
+      }
+    },
+    "id": 1
+  }'
+```
 
 ## Troubleshooting
 
-### "Invalid signature" Error
+| Issue | Solution |
+|-------|----------|
+| "Registration failed" | Check that the signature is correct and timestamp is recent |
+| "Unauthorized" | Ensure the hotkey is registered on the subnet |
+| "Invalid signature" | Make sure you signed with sr25519 and the message format is exact |
+| "Timestamp expired" | The timestamp must be within 5 minutes of the validator's server time |
 
-- **Cause**: Signature doesn't match the claimed hotkey
-- **Fix**: Ensure you're using the correct secret key
+## Important Notes
 
-### "Timestamp expired" Error
-
-- **Cause**: Request took too long or system clock is wrong
-- **Fix**: Check your system clock and try again
-
-### "Username already registered" Error
-
-- **Cause**: This GitHub username is linked to another hotkey
-- **Fix**: Use a different GitHub account or contact support
-
-### "Hotkey already registered" Error
-
-- **Cause**: This hotkey is linked to another GitHub username
-- **Fix**: Send a new registration request to update the linked username
+- Each hotkey can only be registered to **one** GitHub username
+- Each GitHub username can only be linked to **one** hotkey
+- Registration is permanent — you cannot change your linked GitHub username
+- The signature proves ownership of the hotkey without revealing your private key

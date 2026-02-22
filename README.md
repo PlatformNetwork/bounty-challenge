@@ -17,6 +17,78 @@ Bounty Challenge is a WASM evaluation module for [Platform Network](https://gith
 
 > **IMPORTANT**: To receive rewards, you MUST submit issues in **this repository** ([PlatformNetwork/bounty-challenge](https://github.com/PlatformNetwork/bounty-challenge/issues)). Issues submitted directly to other repositories will **NOT** be counted for rewards.
 
+## How to Mine
+
+### 1. Register Your Hotkey
+
+Before mining, register your GitHub username with your Bittensor hotkey using the CLI:
+
+```bash
+# Build the CLI
+cargo build --release -p bounty-cli
+
+# Register (replace with your values)
+./target/release/bounty-cli register \
+  --hotkey YOUR_SS58_HOTKEY \
+  --github YOUR_GITHUB_USERNAME \
+  --signature YOUR_HEX_SIGNATURE \
+  --timestamp UNIX_TIMESTAMP \
+  --rpc-url http://VALIDATOR_IP:8080
+```
+
+The signature is created by signing the message `register_github:{username_lowercase}:{timestamp}` with your sr25519 hotkey. The timestamp must be within 5 minutes of the validator's server time.
+
+### 2. Find and Report Issues
+
+1. Discover valid bugs or issues in eligible repositories
+2. Submit the issue in **this repository** ([PlatformNetwork/bounty-challenge](https://github.com/PlatformNetwork/bounty-challenge/issues))
+3. Wait for project maintainers to review and close the issue with the `valid` label
+
+### 3. Check Your Status
+
+```bash
+# View the leaderboard
+./target/release/bounty-cli leaderboard --rpc-url http://VALIDATOR_IP:8080
+
+# Check your miner status
+./target/release/bounty-cli status --hotkey YOUR_SS58_HOTKEY --rpc-url http://VALIDATOR_IP:8080
+
+# View challenge statistics
+./target/release/bounty-cli stats --rpc-url http://VALIDATOR_IP:8080
+```
+
+### 4. Earn Rewards
+
+Rewards are distributed based on your weight, which is calculated from your valid issues and star bonuses. See [Scoring & Rewards](docs/reference/scoring.md) for the full formula.
+
+## CLI
+
+The `bounty-cli` binary communicates with Platform Network validators via JSON-RPC.
+
+### Installation
+
+```bash
+cargo build --release -p bounty-cli
+```
+
+### Commands
+
+```bash
+# Show leaderboard (top 50 by default)
+bounty-cli leaderboard [--limit N] [--rpc-url URL]
+
+# Register GitHub username with hotkey
+bounty-cli register --hotkey HOTKEY --github USERNAME --signature SIG --timestamp TS [--rpc-url URL]
+
+# Check miner status
+bounty-cli status --hotkey HOTKEY [--rpc-url URL]
+
+# Show challenge statistics
+bounty-cli stats [--rpc-url URL]
+```
+
+The `--rpc-url` flag defaults to `http://localhost:8080`. You can also set the `BOUNTY_RPC_URL` environment variable.
+
 ## Architecture
 
 This project is a `#![no_std]` Rust crate compiled to `wasm32-unknown-unknown`. It implements the `Challenge` trait from [`platform-challenge-sdk-wasm`](https://github.com/PlatformNetwork/platform-v2/tree/main/crates/challenge-sdk-wasm) and runs inside the Platform Network validator runtime.
@@ -37,7 +109,7 @@ flowchart LR
     
     Runtime -->|"loads"| Module
     Miner["🧑‍💻 Miner"] -->|"submit claims"| Evaluate
-    API["HTTP API"] -->|"route requests"| Routes
+    API["Chain RPC"] -->|"route requests"| Routes
     Chain["On-Chain"] -->|"weight queries"| Weights
 ```
 
@@ -47,7 +119,7 @@ flowchart LR
 - **On-Chain Storage**: All state persisted via host-provided key/value storage
 - **Validator Consensus**: Multi-validator agreement on issue validity and sync data
 - **Weight Calculation**: Normalized weight assignments for on-chain rewards
-- **HTTP Routes**: Leaderboard, stats, registration, claims, and more
+- **Chain RPC Routes**: Leaderboard, stats, registration, claims, and more
 
 ## Building
 
@@ -59,6 +131,9 @@ rustup target add wasm32-unknown-unknown
 cargo build --release --target wasm32-unknown-unknown
 
 # Output: target/wasm32-unknown-unknown/release/bounty_challenge.wasm
+
+# Build the CLI
+cargo build --release -p bounty-cli
 ```
 
 ## Reward System
@@ -88,7 +163,10 @@ Where:
 
 ## API Routes
 
-All routes are served through the Platform Network validator bridge.
+All routes are served through the Platform Network validator chain RPC. Access them via:
+
+- **HTTP**: `GET/POST http://VALIDATOR:8080/challenge/bounty-challenge/<path>`
+- **JSON-RPC**: `challenge_call` method at `http://VALIDATOR:8080/rpc`
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
@@ -113,7 +191,11 @@ All routes are served through the Platform Network validator bridge.
 
 ```
 bounty-challenge/
-├── Cargo.toml               # WASM crate config (cdylib + rlib)
+├── Cargo.toml               # Workspace + WASM crate config
+├── bins/
+│   └── bounty-cli/          # CLI binary
+│       ├── Cargo.toml
+│       └── src/main.rs
 ├── src/
 │   ├── lib.rs               # Challenge trait implementation
 │   ├── types.rs             # Domain types
@@ -140,6 +222,9 @@ cargo clippy --target wasm32-unknown-unknown
 
 # Check compilation
 cargo check --target wasm32-unknown-unknown
+
+# Build CLI only
+cargo build -p bounty-cli
 ```
 
 ## Anti-Abuse Mechanisms
@@ -158,9 +243,6 @@ cargo check --target wasm32-unknown-unknown
 - **For Miners:**
   - [Getting Started](docs/miner/getting-started.md)
   - [Registration Guide](docs/miner/registration.md)
-
-- **For Validators:**
-  - [Setup Guide](docs/validator/setup.md)
 
 - **Reference:**
   - [Scoring & Rewards](docs/reference/scoring.md)

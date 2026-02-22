@@ -103,7 +103,7 @@ This creates an audit trail and prevents anonymous claiming. Each hotkey maps to
 
 ### 7. Signature Verification
 
-All authenticated operations require sr25519 signatures, proving ownership of the hotkey. The Platform bridge verifies signatures before forwarding requests to the WASM module.
+All authenticated operations require sr25519 signatures, proving ownership of the hotkey. The Platform validator verifies signatures before forwarding requests to the WASM module.
 
 ## Verification Flow
 

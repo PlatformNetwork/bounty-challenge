@@ -1,98 +1,120 @@
-# Getting Started
+# Getting Started as a Miner
 
-This guide will help you set up and start earning rewards with Bounty Challenge.
+This guide walks you through setting up as a Bounty Challenge miner on Platform Network.
 
 ## Prerequisites
 
-- **Bittensor Wallet**: You need a miner hotkey with its secret key
-- **GitHub Account**: Any GitHub account
+- A Bittensor wallet with a registered hotkey on the subnet
+- A GitHub account
+- Rust toolchain installed (`rustup`)
 
-## How It Works
-
-Bounty Challenge runs as a WASM module inside the Platform Network validator runtime. You interact with it through the Platform bridge API — there is no separate server or CLI to install.
-
-```
-You (Miner) ──▶ Platform Bridge API ──▶ Validator WASM Runtime ──▶ bounty_challenge.wasm
-```
-
-## Quick Start
-
-### 1. Register Your GitHub Account
-
-Register your GitHub username with your Bittensor hotkey by sending a signed request to the Platform bridge:
+## Step 1: Build the CLI
 
 ```bash
-curl -X POST https://chain.platform.network/api/v1/bridge/bounty-challenge/register \
-  -H "Content-Type: application/json" \
-  -d '{
-    "hotkey": "YOUR_SS58_HOTKEY",
-    "github_username": "YOUR_GITHUB_USERNAME",
-    "signature": "0x...",
-    "timestamp": 1705590000
-  }'
+git clone https://github.com/PlatformNetwork/bounty-challenge.git
+cd bounty-challenge
+cargo build --release -p bounty-cli
+```
+
+The CLI binary will be at `./target/release/bounty-cli`.
+
+## Step 2: Register Your GitHub Username
+
+Register your GitHub username with your Bittensor hotkey. This links your on-chain identity to your GitHub account.
+
+```bash
+./target/release/bounty-cli register \
+  --hotkey YOUR_SS58_HOTKEY \
+  --github YOUR_GITHUB_USERNAME \
+  --signature YOUR_HEX_SIGNATURE \
+  --timestamp UNIX_TIMESTAMP \
+  --rpc-url http://VALIDATOR_IP:8080
 ```
 
 The signature must be an sr25519 signature of the message:
 ```
-register_github:{github_username_lowercase}:{timestamp}
+register_github:{github_username_lowercase}:{unix_timestamp}
 ```
 
-See the [Registration Guide](registration.md) for detailed instructions and code examples.
+The timestamp must be within 5 minutes of the validator's server time.
 
-### 2. Create Issues in bounty-challenge
+See the [Registration Guide](registration.md) for detailed instructions on generating the signature.
 
-> **IMPORTANT**: Issues must be submitted to this repository to receive rewards!
+## Step 3: Find and Report Issues
 
-Go to the bounty-challenge repository:
+1. **Discover issues** in eligible repositories
+2. **Submit issues** in the [bounty-challenge repository](https://github.com/PlatformNetwork/bounty-challenge/issues)
+3. **Wait for review** — maintainers will close valid issues with the `valid` label
 
-- **PlatformNetwork/bounty-challenge**: https://github.com/PlatformNetwork/bounty-challenge/issues
+> **IMPORTANT**: Issues must be submitted in the bounty-challenge repository, not directly in the target repository.
 
-Create quality issues (bug reports, feature requests, security issues, documentation improvements). Each valid issue earns you **1 point**.
-
-### 3. Wait for Validation
-
-Maintainers will review your issue:
-- ✅ Valid issue → Closed with `valid` label → **+1 point**
-- ❌ Invalid issue → Marked with `invalid` label → **penalty**
-- ⏳ Closed without labels → No reward or penalty
-
-### 4. Check Your Status
+## Step 4: Monitor Your Progress
 
 ```bash
-curl https://chain.platform.network/api/v1/bridge/bounty-challenge/status/YOUR_HOTKEY
+# Check your status
+./target/release/bounty-cli status \
+  --hotkey YOUR_SS58_HOTKEY \
+  --rpc-url http://VALIDATOR_IP:8080
+
+# View the leaderboard
+./target/release/bounty-cli leaderboard \
+  --rpc-url http://VALIDATOR_IP:8080
+
+# View challenge statistics
+./target/release/bounty-cli stats \
+  --rpc-url http://VALIDATOR_IP:8080
 ```
 
-### 5. View Leaderboard
+## Step 5: Earn Rewards
+
+Rewards are calculated based on your weight:
+
+| Source | Points |
+|--------|--------|
+| Valid Issue | 1 point |
+| Starred Repo | 0.25 points |
+
+**Weight formula**: `net_points × 0.02` (normalized across all miners)
+
+See [Scoring & Rewards](../reference/scoring.md) for the complete specification.
+
+## Chain RPC Access
+
+The CLI communicates with Platform Network validators via JSON-RPC. You can also query the API directly:
+
+### Using curl (HTTP REST)
 
 ```bash
-curl https://chain.platform.network/api/v1/bridge/bounty-challenge/leaderboard
+# Get leaderboard
+curl http://VALIDATOR_IP:8080/challenge/bounty-challenge/leaderboard
+
+# Get stats
+curl http://VALIDATOR_IP:8080/challenge/bounty-challenge/stats
+
+# Check status
+curl http://VALIDATOR_IP:8080/challenge/bounty-challenge/status/YOUR_HOTKEY
 ```
 
-## Reward System
+### Using JSON-RPC
 
-| Source | Points | Description |
-|--------|--------|-------------|
-| **Valid Issue** | 1 point | Issue closed with `valid` label |
-| **Starred Repo** | 0.25 points | Each starred target repository |
+```bash
+curl -X POST http://VALIDATOR_IP:8080/rpc \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "challenge_call",
+    "params": {
+      "challengeId": "bounty-challenge",
+      "method": "GET",
+      "path": "/leaderboard"
+    },
+    "id": 1
+  }'
+```
 
-Weight calculation: `net_points × 0.02` (normalized across all miners).
+## Tips
 
-## Next Steps
-
-- Read the [Registration Guide](registration.md) for detailed registration info
-- Check the [Scoring Documentation](../reference/scoring.md) to understand rewards
-- Review the [API Reference](../reference/api-reference.md) for programmatic access
-
-## Common Issues
-
-### Registration Failed
-
-- Verify your secret key is correct
-- Ensure the timestamp is within 5 minutes of current time
-- Check that your GitHub username is valid
-
-### Issues Not Counting
-
-- Issues must be in the **PlatformNetwork/bounty-challenge** repository
-- Issues must be closed with the `valid` label by a maintainer
-- Your GitHub username must match the issue author
+- **Quality over quantity** — Invalid issues incur penalties
+- **Star eligible repos** — Each starred repo adds 0.25 bonus points
+- **Check before submitting** — Duplicate issues also incur penalties
+- **Monitor your status** — Use the CLI to track your weight and ranking

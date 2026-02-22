@@ -1,0 +1,18 @@
+[package]
+name = "bounty-cli"
+version = "2.0.0"
+edition = "2021"
+description = "CLI for Bounty Challenge — query leaderboard, register miners, check status"
+authors = ["CortexLM"]
+license = "Apache-2.0"
+
+[[bin]]
+name = "bounty-cli"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4", features = ["derive", "env"] }
+reqwest = { version = "0.12", features = ["json"] }
+serde_json = "1.0"
+tokio = { version = "1", features = ["full"] }
+anyhow = "1"

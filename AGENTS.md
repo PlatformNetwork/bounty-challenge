@@ -59,8 +59,12 @@ Key traits and types:
 
 ```
 bounty-challenge/
-├── Cargo.toml               # WASM crate config (cdylib + rlib)
+├── Cargo.toml               # Workspace + WASM crate config (cdylib + rlib)
 ├── Cargo.lock               # Dependency lockfile
+├── bins/
+│   └── bounty-cli/          # CLI binary for miners
+│       ├── Cargo.toml
+│       └── src/main.rs
 ├── src/
 │   ├── lib.rs               # Challenge trait impl + register_challenge! macro
 │   ├── types.rs             # Domain types
