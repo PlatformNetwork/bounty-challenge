@@ -18,6 +18,6 @@ repository = "https://github.com/PlatformNetwork/bounty-challenge"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-platform-challenge-sdk-wasm = { path = "../platform-v2/crates/challenge-sdk-wasm" }
+platform-challenge-sdk-wasm = { git = "https://github.com/PlatformNetwork/platform.git", branch = "main" }
 serde = { version = "1.0", default-features = false, features = ["derive", "alloc"] }
 bincode = { version = "1.3", default-features = false }
