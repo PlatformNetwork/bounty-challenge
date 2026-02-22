@@ -1,14 +1,12 @@
-use alloc::string::String;
 use alloc::vec::Vec;
 use bincode::Options;
 use platform_challenge_sdk_wasm::host_functions::host_consensus_get_submission_count;
 use platform_challenge_sdk_wasm::{WasmRouteRequest, WasmRouteResponse};
 
 use crate::types::{
-    BountySubmission, IssueRecord, RegisterRequest, StatsResponse, StatusResponse, TimeoutConfig,
-    UserBalance,
+    BountySubmission, IssueRecord, RegisterRequest, StatsResponse, StatusResponse, UserBalance,
 };
-use crate::{consensus, scoring, storage, validation};
+use crate::{scoring, storage, validation};
 
 const MAX_ROUTE_BODY_SIZE: usize = 1_048_576;
 
@@ -208,7 +206,8 @@ pub fn handle_hotkey_details(request: &WasmRouteRequest) -> WasmRouteResponse {
     ok_response(bincode::serialize(&status).unwrap_or_default())
 }
 
-pub fn handle_invalid(request: &WasmRouteRequest) -> WasmRouteResponse {
+/// Sync issues data - writes go through platform-v2 consensus via host_storage_set
+pub fn handle_issues_sync(request: &WasmRouteRequest) -> WasmRouteResponse {
     if !is_authenticated(request) {
         return unauthorized_response();
     }
@@ -216,123 +215,10 @@ pub fn handle_invalid(request: &WasmRouteRequest) -> WasmRouteResponse {
         return bad_request_response();
     }
 
-    if let Ok((issue_number, repo_owner, repo_name, github_username, reason)) =
-        bincode_options_route_body()
-            .deserialize::<(u32, String, String, String, Option<String>)>(&request.body)
+    if let Ok(issues) = bincode_options_route_body().deserialize::<Vec<IssueRecord>>(&request.body)
     {
-        let result = storage::record_invalid_issue(
-            issue_number,
-            &repo_owner,
-            &repo_name,
-            &github_username,
-            reason.as_deref(),
-        );
-        if result {
-            scoring::rebuild_leaderboard();
-        }
-        ok_response(bincode::serialize(&result).unwrap_or_default())
-    } else {
-        bad_request_response()
-    }
-}
-
-pub fn handle_sync_propose(request: &WasmRouteRequest) -> WasmRouteResponse {
-    if !is_authenticated(request) {
-        return unauthorized_response();
-    }
-    if request.body.len() > MAX_ROUTE_BODY_SIZE {
-        return bad_request_response();
-    }
-
-    if let Ok((validator_id, issues)) =
-        bincode_options_route_body().deserialize::<(String, Vec<IssueRecord>)>(&request.body)
-    {
-        let result = consensus::propose_sync_data(&validator_id, &issues);
-
-        if let Some(consensus_issues) = consensus::check_sync_consensus() {
-            storage::store_issue_data(&consensus_issues);
-        }
-
-        ok_response(bincode::serialize(&result).unwrap_or_default())
-    } else {
-        bad_request_response()
-    }
-}
-
-pub fn handle_sync_consensus(_request: &WasmRouteRequest) -> WasmRouteResponse {
-    let result = consensus::check_sync_consensus();
-    ok_response(bincode::serialize(&result).unwrap_or_default())
-}
-
-pub fn handle_issue_propose(request: &WasmRouteRequest) -> WasmRouteResponse {
-    if !is_authenticated(request) {
-        return unauthorized_response();
-    }
-    if request.body.len() > MAX_ROUTE_BODY_SIZE {
-        return bad_request_response();
-    }
-
-    if let Ok((validator_id, issue_number, repo_owner, repo_name, is_valid)) =
-        bincode_options_route_body()
-            .deserialize::<(String, u32, String, String, bool)>(&request.body)
-    {
-        let result = consensus::propose_issue_validity(
-            &validator_id,
-            issue_number,
-            &repo_owner,
-            &repo_name,
-            is_valid,
-        );
-        ok_response(bincode::serialize(&result).unwrap_or_default())
-    } else {
-        bad_request_response()
-    }
-}
-
-pub fn handle_issue_consensus(request: &WasmRouteRequest) -> WasmRouteResponse {
-    if request.body.len() > MAX_ROUTE_BODY_SIZE {
-        return bad_request_response();
-    }
-
-    if let Ok((issue_number, repo_owner, repo_name)) =
-        bincode_options_route_body().deserialize::<(u32, String, String)>(&request.body)
-    {
-        let result = consensus::check_issue_consensus(issue_number, &repo_owner, &repo_name);
-        ok_response(bincode::serialize(&result).unwrap_or_default())
-    } else {
-        bad_request_response()
-    }
-}
-
-pub fn handle_get_timeout_config(_request: &WasmRouteRequest) -> WasmRouteResponse {
-    let config: TimeoutConfig =
-        platform_challenge_sdk_wasm::host_functions::host_storage_get(b"timeout_config")
-            .ok()
-            .and_then(|d| {
-                if d.is_empty() {
-                    None
-                } else {
-                    bincode::deserialize(&d).ok()
-                }
-            })
-            .unwrap_or_default();
-    ok_response(bincode::serialize(&config).unwrap_or_default())
-}
-
-pub fn handle_set_timeout_config(request: &WasmRouteRequest) -> WasmRouteResponse {
-    if !is_authenticated(request) {
-        return unauthorized_response();
-    }
-    if request.body.len() > MAX_ROUTE_BODY_SIZE {
-        return bad_request_response();
-    }
-    if let Ok(config) = bincode_options_route_body().deserialize::<TimeoutConfig>(&request.body) {
-        let result = if let Ok(data) = bincode::serialize(&config) {
-            platform_challenge_sdk_wasm::host_functions::host_storage_set(b"timeout_config", &data)
-                .is_ok()
-        } else {
-            false
-        };
+        // This write goes through platform-v2 StorageProposal consensus
+        let result = storage::store_issue_data(&issues);
         ok_response(bincode::serialize(&result).unwrap_or_default())
     } else {
         bad_request_response()

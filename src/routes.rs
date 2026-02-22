@@ -5,6 +5,9 @@ use platform_challenge_sdk_wasm::{WasmRouteDefinition, WasmRouteRequest, WasmRou
 
 use crate::api::handlers;
 
+/// Route definitions for the bounty challenge.
+/// Note: Consensus is handled by platform-v2 via StorageProposal/StorageVote.
+/// The WASM module only exposes data access routes.
 pub fn get_route_definitions() -> Vec<WasmRouteDefinition> {
     vec![
         WasmRouteDefinition {
@@ -57,44 +60,8 @@ pub fn get_route_definitions() -> Vec<WasmRouteDefinition> {
         },
         WasmRouteDefinition {
             method: String::from("POST"),
-            path: String::from("/invalid"),
-            description: String::from("Record an invalid issue (requires auth)"),
-            requires_auth: true,
-        },
-        WasmRouteDefinition {
-            method: String::from("POST"),
-            path: String::from("/sync/propose"),
-            description: String::from("Propose synced issue data for consensus (requires auth)"),
-            requires_auth: true,
-        },
-        WasmRouteDefinition {
-            method: String::from("GET"),
-            path: String::from("/sync/consensus"),
-            description: String::from("Check sync consensus status"),
-            requires_auth: false,
-        },
-        WasmRouteDefinition {
-            method: String::from("POST"),
-            path: String::from("/issue/propose"),
-            description: String::from("Propose issue validity for consensus (requires auth)"),
-            requires_auth: true,
-        },
-        WasmRouteDefinition {
-            method: String::from("POST"),
-            path: String::from("/issue/consensus"),
-            description: String::from("Check issue validity consensus"),
-            requires_auth: false,
-        },
-        WasmRouteDefinition {
-            method: String::from("GET"),
-            path: String::from("/config/timeout"),
-            description: String::from("Returns current timeout configuration"),
-            requires_auth: false,
-        },
-        WasmRouteDefinition {
-            method: String::from("POST"),
-            path: String::from("/config/timeout"),
-            description: String::from("Updates timeout configuration (requires auth)"),
+            path: String::from("/issues/sync"),
+            description: String::from("Sync issue data (writes go through platform consensus)"),
             requires_auth: true,
         },
         WasmRouteDefinition {
@@ -117,13 +84,7 @@ pub fn handle_route_request(request: &WasmRouteRequest) -> WasmRouteResponse {
         ("POST", "/claim") => handlers::handle_claim(request),
         ("GET", "/issues") => handlers::handle_issues(request),
         ("GET", "/issues/pending") => handlers::handle_issues_pending(request),
-        ("POST", "/invalid") => handlers::handle_invalid(request),
-        ("POST", "/sync/propose") => handlers::handle_sync_propose(request),
-        ("GET", "/sync/consensus") => handlers::handle_sync_consensus(request),
-        ("POST", "/issue/propose") => handlers::handle_issue_propose(request),
-        ("POST", "/issue/consensus") => handlers::handle_issue_consensus(request),
-        ("GET", "/config/timeout") => handlers::handle_get_timeout_config(request),
-        ("POST", "/config/timeout") => handlers::handle_set_timeout_config(request),
+        ("POST", "/issues/sync") => handlers::handle_issues_sync(request),
         ("GET", "/get_weights") => handlers::handle_get_weights(request),
         _ => {
             if method == "GET" {

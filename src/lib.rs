@@ -3,7 +3,6 @@
 extern crate alloc;
 
 mod api;
-mod consensus;
 mod routes;
 mod scoring;
 pub mod storage;
