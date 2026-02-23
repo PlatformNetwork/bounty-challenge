@@ -7,7 +7,7 @@ use crate::storage;
 
 const GITHUB_REPO_OWNER: &str = "PlatformNetwork";
 const GITHUB_REPO_NAME: &str = "bounty-challenge";
-const MAX_ISSUES_TO_FETCH: usize = 300;
+const MIN_ISSUES_TO_FETCH: usize = 400;
 const ISSUES_PER_PAGE: usize = 100;
 const SECONDS_24H: i64 = 86_400;
 
@@ -136,8 +136,9 @@ pub fn fetch_and_process_issues() -> SyncStats {
     let since = build_since_param();
     let mut all_issues: Vec<GitHubIssue> = Vec::new();
 
-    // Fetch pages (max 3 pages of 100 = 300 issues)
-    for page in 1..=(MAX_ISSUES_TO_FETCH / ISSUES_PER_PAGE) {
+    // Fetch pages until we have at least MIN_ISSUES_TO_FETCH or no more results
+    let mut page = 1u32;
+    loop {
         let mut url = String::from("https://api.github.com/repos/");
         use core::fmt::Write;
         let _ = write!(
@@ -159,9 +160,15 @@ pub fn fetch_and_process_issues() -> SyncStats {
         let count = issues.len();
         all_issues.extend(issues);
 
+        // Stop if last page (fewer results than page size)
         if count < ISSUES_PER_PAGE {
             break;
         }
+        // Stop once we have enough
+        if all_issues.len() >= MIN_ISSUES_TO_FETCH {
+            break;
+        }
+        page += 1;
     }
 
     stats.fetched = all_issues.len() as u32;
