@@ -55,7 +55,16 @@ pub fn process_claims(submission: &BountySubmission, synced_issues: &[IssueRecor
 
     for &issue_number in &submission.issue_numbers {
         if storage::is_issue_recorded(&submission.repo_owner, &submission.repo_name, issue_number) {
-            storage::increment_duplicate_count(&submission.hotkey);
+            // Only count as duplicate if claimed by a different user
+            if let Some(record) = storage::get_issue_record(
+                &submission.repo_owner,
+                &submission.repo_name,
+                issue_number,
+            ) {
+                if record.claimed_by_hotkey.as_deref() != Some(&submission.hotkey) {
+                    storage::increment_duplicate_count(&submission.hotkey);
+                }
+            }
             rejected.push(RejectedIssue {
                 issue_number,
                 reason: String::from("Issue already claimed"),

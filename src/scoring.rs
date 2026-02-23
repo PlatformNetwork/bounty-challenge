@@ -21,11 +21,17 @@ pub fn calculate_weight_from_points(valid_count: u32, star_count: u32) -> f64 {
     total_points * WEIGHT_PER_POINT
 }
 
-pub fn calculate_net_points(valid_count: u32, invalid_count: u32, star_count: u32) -> f64 {
+pub fn calculate_net_points(
+    valid_count: u32,
+    invalid_count: u32,
+    duplicate_count: u32,
+    star_count: u32,
+) -> f64 {
     let issue_points = valid_count as f64;
     let star_points = star_count as f64 * STAR_BONUS_PER_REPO;
-    let penalty = if invalid_count > valid_count {
-        (invalid_count - valid_count) as f64
+    let total_negative = invalid_count.saturating_add(duplicate_count);
+    let penalty = if total_negative > valid_count {
+        (total_negative - valid_count) as f64
     } else {
         0.0
     };
@@ -69,6 +75,7 @@ pub fn rebuild_leaderboard() {
         let net_points = calculate_net_points(
             balance.valid_count,
             balance.invalid_count,
+            balance.duplicate_count,
             balance.star_count,
         );
         let score = calculate_weight_from_points(balance.valid_count, balance.star_count);
