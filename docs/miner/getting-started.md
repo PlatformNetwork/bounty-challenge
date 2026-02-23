@@ -29,10 +29,8 @@ The CLI binary will be at `./target/release/bounty-cli`.
 ## Step 2: Launch the Interactive CLI
 
 ```bash
-# Set your validator RPC URL
-export BOUNTY_RPC_URL=http://VALIDATOR_IP:8080
-
-# Launch the CLI
+# Launch the CLI (uses https://chain.platform.network by default)
+# Or set a custom RPC URL: export BOUNTY_RPC_URL=https://custom-validator.com
 bounty-cli
 ```
 

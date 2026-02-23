@@ -6,7 +6,7 @@ use anyhow::Result;
 use console::style;
 use dialoguer::{Input, Select};
 
-const DEFAULT_RPC_URL: &str = "http://localhost:8080";
+const DEFAULT_RPC_URL: &str = "https://chain.platform.network";
 
 const MENU_ITEMS: &[&str] = &[
     "Leaderboard        (live dashboard)",

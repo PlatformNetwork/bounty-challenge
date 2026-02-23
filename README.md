@@ -43,10 +43,11 @@ cargo build --release -p bounty-cli
 ### 2. Launch the Interactive CLI
 
 ```bash
-# Set validator RPC URL (optional, defaults to localhost:8080)
-export BOUNTY_RPC_URL=http://VALIDATOR_IP:8080
+# Launch interactive TUI (uses https://chain.platform.network by default)
+bounty-cli
 
-# Launch interactive TUI
+# Or set a custom validator RPC URL
+export BOUNTY_RPC_URL=https://chain.platform.network
 bounty-cli
 ```
 
@@ -54,7 +55,7 @@ The CLI provides an interactive menu with live dashboards:
 
 ```
   bounty-challenge
-  RPC: http://localhost:8080
+  RPC: https://chain.platform.network
 
 ? Select an action ›
 ❯ Leaderboard        (live dashboard)
