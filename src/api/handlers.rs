@@ -3,6 +3,7 @@ use alloc::vec::Vec;
 use bincode::Options;
 use platform_challenge_sdk_wasm::host_functions::host_consensus_get_submission_count;
 use platform_challenge_sdk_wasm::{WasmRouteRequest, WasmRouteResponse};
+use serde::Serialize;
 
 use crate::types::{
     BountySubmission, ClaimRequest, GitHubUserDetailsResponse, IssueRecord, IssueShort,
@@ -19,29 +20,39 @@ fn bincode_options_route_body() -> impl Options {
         .allow_trailing_bytes()
 }
 
+#[allow(dead_code)]
 fn ok_response(body: Vec<u8>) -> WasmRouteResponse {
     WasmRouteResponse { status: 200, body }
 }
 
-fn unauthorized_response() -> WasmRouteResponse {
+fn json_response<T: Serialize>(data: &T) -> WasmRouteResponse {
     WasmRouteResponse {
-        status: 401,
-        body: bincode::serialize(&false).unwrap_or_default(),
+        status: 200,
+        body: serde_json::to_vec(data).unwrap_or_default(),
     }
+}
+
+fn json_error(status: u16, error: &str, message: &str) -> WasmRouteResponse {
+    WasmRouteResponse {
+        status,
+        body: serde_json::to_vec(&serde_json::json!({
+            "error": error,
+            "message": message
+        }))
+        .unwrap_or_default(),
+    }
+}
+
+fn unauthorized_response() -> WasmRouteResponse {
+    json_error(401, "unauthorized", "Authentication required")
 }
 
 fn bad_request_response() -> WasmRouteResponse {
-    WasmRouteResponse {
-        status: 400,
-        body: bincode::serialize(&false).unwrap_or_default(),
-    }
+    json_error(400, "bad_request", "Invalid request")
 }
 
 fn not_found_response() -> WasmRouteResponse {
-    WasmRouteResponse {
-        status: 404,
-        body: Vec::new(),
-    }
+    json_error(404, "not_found", "Resource not found")
 }
 
 fn is_authenticated(request: &WasmRouteRequest) -> bool {
@@ -61,8 +72,10 @@ fn get_param<'a>(request: &'a WasmRouteRequest, name: &str) -> Option<&'a str> {
 }
 
 pub fn handle_leaderboard(_request: &WasmRouteRequest) -> WasmRouteResponse {
+    // Rebuild leaderboard dynamically from registered hotkeys
+    scoring::rebuild_leaderboard();
     let entries = storage::get_leaderboard();
-    ok_response(bincode::serialize(&entries).unwrap_or_default())
+    json_response(&entries)
 }
 
 pub fn handle_stats(_request: &WasmRouteRequest) -> WasmRouteResponse {
@@ -77,7 +90,7 @@ pub fn handle_stats(_request: &WasmRouteRequest) -> WasmRouteResponse {
         validator_count,
         total_issues: issues.len() as u64,
     };
-    ok_response(bincode::serialize(&stats).unwrap_or_default())
+    json_response(&stats)
 }
 
 pub fn handle_status(request: &WasmRouteRequest) -> WasmRouteResponse {
@@ -97,7 +110,7 @@ pub fn handle_status(request: &WasmRouteRequest) -> WasmRouteResponse {
                 balance: UserBalance::default(),
                 weight: 0.0,
             };
-            return ok_response(bincode::serialize(&status).unwrap_or_default());
+            return json_response(&status);
         }
     };
 
@@ -116,7 +129,7 @@ pub fn handle_status(request: &WasmRouteRequest) -> WasmRouteResponse {
         balance,
         weight,
     };
-    ok_response(bincode::serialize(&status).unwrap_or_default())
+    json_response(&status)
 }
 
 pub fn handle_register(request: &WasmRouteRequest) -> WasmRouteResponse {
@@ -143,11 +156,50 @@ pub fn handle_register(request: &WasmRouteRequest) -> WasmRouteResponse {
     // Use authenticated hotkey from headers, or fall back to body hotkey
     let hotkey = request.auth_hotkey.as_deref().unwrap_or(&reg.hotkey);
 
+    // Check specific error conditions for better error messages
+    let existing_hotkey_for_github = storage::get_hotkey_by_github(&reg.github_username);
+    let existing_github_for_hotkey = storage::get_github_by_hotkey(hotkey);
+
+    if let Some(ref existing) = existing_hotkey_for_github {
+        if existing != hotkey {
+            return json_error(
+                400,
+                "github_already_registered",
+                &alloc::format!(
+                    "GitHub '{}' is already registered to hotkey {}",
+                    reg.github_username,
+                    existing
+                ),
+            );
+        }
+    }
+
+    if let Some(ref existing) = existing_github_for_hotkey {
+        if existing.to_lowercase() != reg.github_username.to_lowercase() {
+            return json_error(
+                400,
+                "hotkey_already_registered",
+                &alloc::format!("Hotkey is already registered to GitHub '{}'", existing),
+            );
+        }
+    }
+
     let result = storage::register_user(&reg.github_username, hotkey);
     if result {
         storage::ensure_hotkey_tracked(hotkey);
+        json_response(&serde_json::json!({
+            "success": true,
+            "message": "Registration successful",
+            "hotkey": hotkey,
+            "github_username": reg.github_username
+        }))
+    } else {
+        json_error(
+            400,
+            "registration_failed",
+            "Registration failed - unknown error",
+        )
     }
-    ok_response(bincode::serialize(&result).unwrap_or_default())
 }
 
 pub fn handle_claim(request: &WasmRouteRequest) -> WasmRouteResponse {
@@ -203,7 +255,7 @@ pub fn handle_claim(request: &WasmRouteRequest) -> WasmRouteResponse {
             scoring::rebuild_leaderboard();
         }
 
-        return ok_response(bincode::serialize(&result).unwrap_or_default());
+        return json_response(&result);
     }
 
     // Fallback: try legacy bincode format (BountySubmission)
@@ -232,17 +284,17 @@ pub fn handle_claim(request: &WasmRouteRequest) -> WasmRouteResponse {
         scoring::rebuild_leaderboard();
     }
 
-    ok_response(bincode::serialize(&result).unwrap_or_default())
+    json_response(&result)
 }
 
 pub fn handle_issues(_request: &WasmRouteRequest) -> WasmRouteResponse {
     let issues = storage::get_synced_issues();
-    ok_response(bincode::serialize(&issues).unwrap_or_default())
+    json_response(&issues)
 }
 
 pub fn handle_issues_pending(_request: &WasmRouteRequest) -> WasmRouteResponse {
     let issues = storage::get_pending_issues();
-    ok_response(bincode::serialize(&issues).unwrap_or_default())
+    json_response(&issues)
 }
 
 pub fn handle_hotkey_details(request: &WasmRouteRequest) -> WasmRouteResponse {
@@ -271,7 +323,7 @@ pub fn handle_hotkey_details(request: &WasmRouteRequest) -> WasmRouteResponse {
         balance,
         weight,
     };
-    ok_response(bincode::serialize(&status).unwrap_or_default())
+    json_response(&status)
 }
 
 pub fn handle_issues_stats(_request: &WasmRouteRequest) -> WasmRouteResponse {
@@ -309,7 +361,7 @@ pub fn handle_issues_stats(_request: &WasmRouteRequest) -> WasmRouteResponse {
         invalid,
         pending,
     };
-    ok_response(bincode::serialize(&stats).unwrap_or_default())
+    json_response(&stats)
 }
 
 pub fn handle_github_user(request: &WasmRouteRequest) -> WasmRouteResponse {
@@ -388,11 +440,11 @@ pub fn handle_github_user(request: &WasmRouteRequest) -> WasmRouteResponse {
         open_issues,
         recent_issues: recent,
     };
-    ok_response(bincode::serialize(&details).unwrap_or_default())
+    json_response(&details)
 }
 
 pub fn handle_get_weights(_request: &WasmRouteRequest) -> WasmRouteResponse {
     let entries = storage::get_leaderboard();
     let weights = scoring::calculate_weights_from_leaderboard(&entries);
-    ok_response(bincode::serialize(&weights).unwrap_or_default())
+    json_response(&weights)
 }
