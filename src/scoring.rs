@@ -35,10 +35,10 @@ pub fn calculate_net_points(valid_count: u32, invalid_count: u32, star_count: u3
 pub fn calculate_weights_from_leaderboard(entries: &[LeaderboardEntry]) -> Vec<WeightAssignment> {
     let mut weights: Vec<WeightAssignment> = entries
         .iter()
-        .filter(|e| !e.is_penalized && e.score > 0.0)
+        .filter(|e| !e.is_penalized && e.net_points > 0.0)
         .map(|e| WeightAssignment {
             hotkey: e.hotkey.clone(),
-            weight: e.score,
+            weight: e.net_points,
         })
         .collect();
 
