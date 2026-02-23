@@ -89,6 +89,8 @@ impl Challenge for BountyChallengeWasm {
             return EvaluationOutput::failure("github username mismatch with registration");
         }
 
+        storage::ensure_hotkey_tracked(&submission.hotkey);
+
         let synced_issues = storage::get_synced_issues();
         let result = validation::process_claims(&submission, &synced_issues);
 

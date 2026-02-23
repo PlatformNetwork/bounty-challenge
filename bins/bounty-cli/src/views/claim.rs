@@ -48,23 +48,36 @@ pub async fn run(rpc_url: &str) -> Result<()> {
     let result = rpc_call_auth(rpc_url, "POST", "/claim", Some(body), &pair).await?;
     let response_body = result.get("body").unwrap_or(&result);
 
-    let success = response_body
-        .get("success")
-        .and_then(|v| v.as_bool())
-        .unwrap_or_else(|| response_body.as_bool().unwrap_or(false));
+    // ClaimResult has: claimed, rejected, total_valid, score
+    let claimed = response_body
+        .get("claimed")
+        .and_then(|v| v.as_array())
+        .map(|a| a.len())
+        .unwrap_or(0);
+    let rejected = response_body
+        .get("rejected")
+        .and_then(|v| v.as_array())
+        .map(|a| a.len())
+        .unwrap_or(0);
 
-    if success {
+    if claimed > 0 {
         println!(
             "\n{}",
             style("Claim submitted successfully!").green().bold()
         );
-    } else {
-        let error = response_body
-            .get("error")
-            .and_then(|v| v.as_str())
-            .unwrap_or("Check that the issue has both 'ide' and 'valid' labels.");
+        println!("  Claimed: {}", claimed);
+        if rejected > 0 {
+            println!("  Rejected: {}", rejected);
+        }
+    } else if let Some(error) = response_body.get("error").and_then(|v| v.as_str()) {
         println!("\n{}", style("Claim failed.").red().bold());
         println!("  Error: {}", error);
+    } else {
+        println!("\n{}", style("Claim failed.").red().bold());
+        if rejected > 0 {
+            println!("  Rejected: {}", rejected);
+        }
+        println!("  Check that the issue has both 'ide' and 'valid' labels.");
     }
 
     println!();
