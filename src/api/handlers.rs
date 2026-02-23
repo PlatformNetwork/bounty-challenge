@@ -5,8 +5,8 @@ use platform_challenge_sdk_wasm::host_functions::host_consensus_get_submission_c
 use platform_challenge_sdk_wasm::{WasmRouteRequest, WasmRouteResponse};
 
 use crate::types::{
-    BountySubmission, ClaimRequest, IssueRecord, RegisterRequest, StatsResponse, StatusResponse,
-    UserBalance,
+    BountySubmission, ClaimRequest, GitHubUserDetailsResponse, IssueRecord, IssueShort,
+    IssuesStatsResponse, RegisterRequest, StatsResponse, StatusResponse, UserBalance,
 };
 use crate::{scoring, storage, validation};
 
@@ -279,6 +279,123 @@ pub fn handle_issues_sync(request: &WasmRouteRequest) -> WasmRouteResponse {
     } else {
         bad_request_response()
     }
+}
+
+pub fn handle_issues_stats(_request: &WasmRouteRequest) -> WasmRouteResponse {
+    let issues = storage::get_synced_issues();
+
+    let total = issues.len() as u64;
+    let mut open = 0u64;
+    let mut closed = 0u64;
+    let mut valid = 0u64;
+    let mut invalid = 0u64;
+    let mut pending = 0u64;
+
+    for issue in &issues {
+        if issue.is_closed {
+            closed += 1;
+        } else {
+            open += 1;
+        }
+        if issue.has_valid_label {
+            valid += 1;
+        }
+        if issue.has_invalid_label {
+            invalid += 1;
+        }
+        if issue.is_closed && !issue.has_valid_label && !issue.has_invalid_label {
+            pending += 1;
+        }
+    }
+
+    let stats = IssuesStatsResponse {
+        total,
+        open,
+        closed,
+        valid,
+        invalid,
+        pending,
+    };
+    ok_response(bincode::serialize(&stats).unwrap_or_default())
+}
+
+pub fn handle_github_user(request: &WasmRouteRequest) -> WasmRouteResponse {
+    let username = match get_param(request, "username") {
+        Some(u) => u,
+        None => return bad_request_response(),
+    };
+
+    let hotkey = storage::get_hotkey_by_github(username);
+    let issues = storage::get_synced_issues();
+
+    let user_issues: Vec<&IssueRecord> = issues
+        .iter()
+        .filter(|i| i.author.to_lowercase() == username.to_lowercase())
+        .collect();
+
+    let total_issues = user_issues.len() as u64;
+    let valid_issues = user_issues.iter().filter(|i| i.has_valid_label).count() as u64;
+    let invalid_issues = user_issues.iter().filter(|i| i.has_invalid_label).count() as u64;
+    let open_issues = user_issues.iter().filter(|i| !i.is_closed).count() as u64;
+
+    let mut recent: Vec<IssueShort> = user_issues
+        .iter()
+        .map(|i| {
+            let mut labels = Vec::new();
+            if i.has_valid_label {
+                labels.push(alloc::string::String::from("valid"));
+            }
+            if i.has_invalid_label {
+                labels.push(alloc::string::String::from("invalid"));
+            }
+            if i.has_ide_label {
+                labels.push(alloc::string::String::from("ide"));
+            }
+            let state = if i.is_closed {
+                alloc::string::String::from("closed")
+            } else {
+                alloc::string::String::from("open")
+            };
+            let mut url = alloc::string::String::from("https://github.com/");
+            url.push_str(&i.repo_owner);
+            url.push('/');
+            url.push_str(&i.repo_name);
+            url.push_str("/issues/");
+            let _ = core::fmt::Write::write_fmt(&mut url, format_args!("{}", i.issue_number));
+
+            IssueShort {
+                issue_id: i.issue_number,
+                repo_owner: i.repo_owner.clone(),
+                repo_name: i.repo_name.clone(),
+                title: alloc::string::String::new(),
+                state,
+                labels,
+                updated_at: alloc::string::String::new(),
+                issue_url: url,
+            }
+        })
+        .collect();
+    recent.truncate(20);
+
+    let registered_at = hotkey.as_ref().and_then(|hk| {
+        storage::get_user_by_hotkey(hk).map(|reg| {
+            let mut s = alloc::string::String::new();
+            let _ = core::fmt::Write::write_fmt(&mut s, format_args!("{}", reg.registered_epoch));
+            s
+        })
+    });
+
+    let details = GitHubUserDetailsResponse {
+        github_username: alloc::string::String::from(username),
+        hotkey,
+        registered_at,
+        total_issues,
+        valid_issues,
+        invalid_issues,
+        open_issues,
+        recent_issues: recent,
+    };
+    ok_response(bincode::serialize(&details).unwrap_or_default())
 }
 
 pub fn handle_get_weights(_request: &WasmRouteRequest) -> WasmRouteResponse {

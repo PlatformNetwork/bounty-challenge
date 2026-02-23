@@ -155,4 +155,38 @@ impl Default for TimeoutConfig {
     }
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct IssuesStatsResponse {
+    pub total: u64,
+    pub open: u64,
+    pub closed: u64,
+    pub valid: u64,
+    pub invalid: u64,
+    pub pending: u64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct IssueShort {
+    pub issue_id: u32,
+    pub repo_owner: String,
+    pub repo_name: String,
+    pub title: String,
+    pub state: String,
+    pub labels: Vec<String>,
+    pub updated_at: String,
+    pub issue_url: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct GitHubUserDetailsResponse {
+    pub github_username: String,
+    pub hotkey: Option<String>,
+    pub registered_at: Option<String>,
+    pub total_issues: u64,
+    pub valid_issues: u64,
+    pub invalid_issues: u64,
+    pub open_issues: u64,
+    pub recent_issues: Vec<IssueShort>,
+}
+
 pub use platform_challenge_sdk_wasm::{LlmMessage, LlmRequest, LlmResponse};

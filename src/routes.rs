@@ -59,6 +59,20 @@ pub fn get_route_definitions() -> Vec<WasmRouteDefinition> {
             requires_auth: false,
         },
         WasmRouteDefinition {
+            method: String::from("GET"),
+            path: String::from("/issues/stats"),
+            description: String::from(
+                "Issue statistics: total, open, closed, valid, invalid, pending",
+            ),
+            requires_auth: false,
+        },
+        WasmRouteDefinition {
+            method: String::from("GET"),
+            path: String::from("/github/:username"),
+            description: String::from("Get GitHub user details and their issues"),
+            requires_auth: false,
+        },
+        WasmRouteDefinition {
             method: String::from("POST"),
             path: String::from("/issues/sync"),
             description: String::from("Sync issue data (writes go through platform consensus)"),
@@ -84,6 +98,7 @@ pub fn handle_route_request(request: &WasmRouteRequest) -> WasmRouteResponse {
         ("POST", "/claim") => handlers::handle_claim(request),
         ("GET", "/issues") => handlers::handle_issues(request),
         ("GET", "/issues/pending") => handlers::handle_issues_pending(request),
+        ("GET", "/issues/stats") => handlers::handle_issues_stats(request),
         ("POST", "/issues/sync") => handlers::handle_issues_sync(request),
         ("GET", "/get_weights") => handlers::handle_get_weights(request),
         _ => {
@@ -93,6 +108,9 @@ pub fn handle_route_request(request: &WasmRouteRequest) -> WasmRouteResponse {
                 }
                 if path.starts_with("/hotkey/") {
                     return handlers::handle_hotkey_details(request);
+                }
+                if path.starts_with("/github/") {
+                    return handlers::handle_github_user(request);
                 }
             }
             WasmRouteResponse {
