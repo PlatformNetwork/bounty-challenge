@@ -93,8 +93,8 @@ pub fn rebuild_leaderboard() {
     }
 
     entries.sort_by(|a, b| {
-        b.score
-            .partial_cmp(&a.score)
+        b.net_points
+            .partial_cmp(&a.net_points)
             .unwrap_or(core::cmp::Ordering::Equal)
     });
 

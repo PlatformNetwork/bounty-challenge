@@ -136,6 +136,10 @@ pub fn handle_register(request: &WasmRouteRequest) -> WasmRouteResponse {
         },
     };
 
+    if reg.github_username.trim().is_empty() {
+        return bad_request_response();
+    }
+
     // Use authenticated hotkey from headers, or fall back to body hotkey
     let hotkey = request.auth_hotkey.as_deref().unwrap_or(&reg.hotkey);
 
@@ -203,11 +207,19 @@ pub fn handle_claim(request: &WasmRouteRequest) -> WasmRouteResponse {
     }
 
     // Fallback: try legacy bincode format (BountySubmission)
-    let submission: BountySubmission = match bincode_options_route_body().deserialize(&request.body)
-    {
-        Ok(s) => s,
-        Err(_) => return bad_request_response(),
-    };
+    let mut submission: BountySubmission =
+        match bincode_options_route_body().deserialize(&request.body) {
+            Ok(s) => s,
+            Err(_) => return bad_request_response(),
+        };
+
+    // Override body-provided identity with authenticated hotkey to prevent impersonation
+    submission.hotkey = auth_hotkey.clone();
+    if let Some(reg) = storage::get_user_by_hotkey(&auth_hotkey) {
+        submission.github_username = reg.github_username;
+    } else {
+        return unauthorized_response();
+    }
 
     if !validation::validate_submission(&submission) {
         return bad_request_response();
@@ -260,25 +272,6 @@ pub fn handle_hotkey_details(request: &WasmRouteRequest) -> WasmRouteResponse {
         weight,
     };
     ok_response(bincode::serialize(&status).unwrap_or_default())
-}
-
-/// Sync issues data - writes go through platform-v2 consensus via host_storage_set
-pub fn handle_issues_sync(request: &WasmRouteRequest) -> WasmRouteResponse {
-    if !is_authenticated(request) {
-        return unauthorized_response();
-    }
-    if request.body.len() > MAX_ROUTE_BODY_SIZE {
-        return bad_request_response();
-    }
-
-    if let Ok(issues) = bincode_options_route_body().deserialize::<Vec<IssueRecord>>(&request.body)
-    {
-        // This write goes through platform-v2 StorageProposal consensus
-        let result = storage::store_issue_data(&issues);
-        ok_response(bincode::serialize(&result).unwrap_or_default())
-    } else {
-        bad_request_response()
-    }
 }
 
 pub fn handle_issues_stats(_request: &WasmRouteRequest) -> WasmRouteResponse {

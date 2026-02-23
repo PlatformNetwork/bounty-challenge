@@ -73,12 +73,6 @@ pub fn get_route_definitions() -> Vec<WasmRouteDefinition> {
             requires_auth: false,
         },
         WasmRouteDefinition {
-            method: String::from("POST"),
-            path: String::from("/issues/sync"),
-            description: String::from("Sync issue data (writes go through platform consensus)"),
-            requires_auth: true,
-        },
-        WasmRouteDefinition {
             method: String::from("GET"),
             path: String::from("/get_weights"),
             description: String::from("Returns normalized weight assignments for all miners"),
@@ -99,7 +93,10 @@ pub fn handle_route_request(request: &WasmRouteRequest) -> WasmRouteResponse {
         ("GET", "/issues") => handlers::handle_issues(request),
         ("GET", "/issues/pending") => handlers::handle_issues_pending(request),
         ("GET", "/issues/stats") => handlers::handle_issues_stats(request),
-        ("POST", "/issues/sync") => handlers::handle_issues_sync(request),
+        ("POST", "/issues/sync") => WasmRouteResponse {
+            status: 403,
+            body: Vec::new(),
+        },
         ("GET", "/get_weights") => handlers::handle_get_weights(request),
         _ => {
             if method == "GET" {

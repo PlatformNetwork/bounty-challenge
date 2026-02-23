@@ -98,8 +98,16 @@ pub fn record_valid_issue(
 ) -> bool {
     let key = issue_key(repo_owner, repo_name, issue_number);
 
+    // Acquire a lock key to prevent concurrent claims on the same issue
+    let mut lock_key = Vec::from(b"lock:" as &[u8]);
+    lock_key.extend_from_slice(&key);
+    if host_storage_set(&lock_key, &[1]).is_err() {
+        return false;
+    }
+
     if let Ok(data) = host_storage_get(&key) {
         if !data.is_empty() {
+            let _ = host_storage_set(&lock_key, &[]);
             return false;
         }
     }
@@ -122,14 +130,19 @@ pub fn record_valid_issue(
 
     let data = match bincode::serialize(&record) {
         Ok(d) => d,
-        Err(_) => return false,
+        Err(_) => {
+            let _ = host_storage_set(&lock_key, &[]);
+            return false;
+        }
     };
 
     if host_storage_set(&key, &data).is_err() {
+        let _ = host_storage_set(&lock_key, &[]);
         return false;
     }
 
     increment_valid_count(hotkey);
+    let _ = host_storage_set(&lock_key, &[]);
     true
 }
 
@@ -220,6 +233,12 @@ fn store_user_balance(hotkey: &str, balance: &UserBalance) {
 fn increment_valid_count(hotkey: &str) {
     let mut balance = get_user_balance(hotkey);
     balance.valid_count = balance.valid_count.saturating_add(1);
+    store_user_balance(hotkey, &balance);
+}
+
+pub fn increment_duplicate_count(hotkey: &str) {
+    let mut balance = get_user_balance(hotkey);
+    balance.duplicate_count = balance.duplicate_count.saturating_add(1);
     store_user_balance(hotkey, &balance);
 }
 
