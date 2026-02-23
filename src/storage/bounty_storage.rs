@@ -233,12 +233,22 @@ fn store_user_balance(hotkey: &str, balance: &UserBalance) {
 fn increment_valid_count(hotkey: &str) {
     let mut balance = get_user_balance(hotkey);
     balance.valid_count = balance.valid_count.saturating_add(1);
+    let penalty = (balance
+        .invalid_count
+        .saturating_add(balance.duplicate_count))
+    .saturating_sub(balance.valid_count);
+    balance.is_penalized = penalty > 0;
     store_user_balance(hotkey, &balance);
 }
 
 pub fn increment_duplicate_count(hotkey: &str) {
     let mut balance = get_user_balance(hotkey);
     balance.duplicate_count = balance.duplicate_count.saturating_add(1);
+    let penalty = (balance
+        .invalid_count
+        .saturating_add(balance.duplicate_count))
+    .saturating_sub(balance.valid_count);
+    balance.is_penalized = penalty > 0;
     store_user_balance(hotkey, &balance);
 }
 
