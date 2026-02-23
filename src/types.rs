@@ -24,6 +24,12 @@ pub struct RegisterRequest {
     pub timestamp: i64,
 }
 
+/// Simplified claim request - authentication done via headers
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ClaimRequest {
+    pub issue_url: String,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct UserRegistration {
     pub hotkey: String,

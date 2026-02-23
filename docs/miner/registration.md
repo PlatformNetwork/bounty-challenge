@@ -6,100 +6,52 @@ This guide explains how to register your GitHub username with your Bittensor hot
 
 Registration links your on-chain Bittensor hotkey to your GitHub username. This is required before you can earn rewards for submitting valid issues.
 
-## Registration Steps
+## Registration via Interactive CLI (Recommended)
 
-### 1. Prepare Your Signature
-
-The registration requires an sr25519 signature proving you own the hotkey. Sign the following message:
-
-```
-register_github:{github_username_lowercase}:{unix_timestamp}
-```
-
-For example, if your GitHub username is `JohnDoe` and the current timestamp is `1705590000`:
-
-```
-register_github:johndoe:1705590000
-```
-
-> **Note**: The username in the message must be **lowercase**, regardless of your actual GitHub username casing.
-
-### 2. Register via CLI
+The easiest way to register is using the interactive CLI:
 
 ```bash
-./target/release/bounty-cli register \
-  --hotkey 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY \
-  --github JohnDoe \
-  --signature 0xabc123...def456 \
-  --timestamp 1705590000 \
-  --rpc-url https://chain.platform.network
+bounty-cli
 ```
 
-### 3. Verify Registration
+1. Select **Register** from the menu
+2. Enter your GitHub username
+3. Enter your 24-word mnemonic (input is hidden)
+4. The CLI will automatically sign and submit the registration
+
+The CLI uses platform-v2's authentication format with headers (`X-Hotkey`, `X-Signature`, `X-Nonce`).
+
+## Authentication Format (platform-v2)
+
+All authenticated requests use sr25519 signatures with the following format:
+
+**Signed message:**
+```
+challenge:bounty-challenge:{METHOD}:{PATH}:{BODY_HASH}:{NONCE}
+```
+
+**Headers:**
+- `X-Hotkey`: Your hotkey public key (hex, 64 chars)
+- `X-Signature`: sr25519 signature (hex, 128 chars)  
+- `X-Nonce`: `{unix_timestamp}:{random_hex}`
+
+**Body hash:** SHA256 of the JSON request body (hex encoded)
+
+## Verify Registration
+
+After registering, select **My Status** from the CLI menu and enter your hotkey to verify.
+
+## Direct API Registration (Advanced)
+
+You can register directly via JSON-RPC with the new authentication format:
 
 ```bash
-./target/release/bounty-cli status \
-  --hotkey 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY \
-  --rpc-url https://chain.platform.network
-```
+# Generate the auth values:
+# - BODY_HASH: SHA256 of '{"github_username":"JohnDoe"}' (hex)
+# - NONCE: {timestamp}:{random_hex}
+# - MESSAGE: challenge:bounty-challenge:POST:/register:{BODY_HASH}:{NONCE}
+# - SIGNATURE: sr25519 sign(MESSAGE)
 
-## Generating the Signature
-
-### Python (using substrate-interface)
-
-```python
-import time
-from substrateinterface import Keypair
-
-keypair = Keypair.create_from_mnemonic("your mnemonic here")
-
-timestamp = int(time.time())
-message = f"register_github:johndoe:{timestamp}"
-signature = keypair.sign(message.encode()).hex()
-
-print(f"Hotkey:    {keypair.ss58_address}")
-print(f"Signature: 0x{signature}")
-print(f"Timestamp: {timestamp}")
-```
-
-### JavaScript (using @polkadot/keyring)
-
-```javascript
-const { Keyring } = require('@polkadot/keyring');
-const { u8aToHex } = require('@polkadot/util');
-
-const keyring = new Keyring({ type: 'sr25519' });
-const pair = keyring.addFromMnemonic('your mnemonic here');
-
-const timestamp = Math.floor(Date.now() / 1000);
-const message = `register_github:johndoe:${timestamp}`;
-const signature = pair.sign(message);
-
-console.log(`Hotkey:    ${pair.address}`);
-console.log(`Signature: ${u8aToHex(signature)}`);
-console.log(`Timestamp: ${timestamp}`);
-```
-
-## Direct API Registration
-
-You can also register directly via the chain RPC without the CLI:
-
-### Using curl (HTTP REST)
-
-```bash
-curl -X POST https://chain.platform.network/challenge/bounty-challenge/register \
-  -H "Content-Type: application/json" \
-  -d '{
-    "hotkey": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
-    "github_username": "JohnDoe",
-    "signature": "0xabc123...def456",
-    "timestamp": 1705590000
-  }'
-```
-
-### Using JSON-RPC
-
-```bash
 curl -X POST https://chain.platform.network/rpc \
   -H "Content-Type: application/json" \
   -d '{
@@ -110,15 +62,19 @@ curl -X POST https://chain.platform.network/rpc \
       "method": "POST",
       "path": "/register",
       "body": {
-        "hotkey": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
-        "github_username": "JohnDoe",
-        "signature": "0xabc123...def456",
-        "timestamp": 1705590000
+        "github_username": "JohnDoe"
+      },
+      "headers": {
+        "X-Hotkey": "your_hotkey_hex_64_chars",
+        "X-Signature": "your_signature_hex_128_chars",
+        "X-Nonce": "1705590000:abc123def456"
       }
     },
     "id": 1
   }'
 ```
+
+> **Note**: The CLI handles all the signing automatically. Direct API usage is only recommended for advanced integrations.
 
 ## Troubleshooting
 

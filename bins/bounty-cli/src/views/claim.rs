@@ -3,7 +3,7 @@ use console::style;
 use dialoguer::{Input, Password};
 use sp_core::{crypto::Pair as PairTrait, sr25519::Pair};
 
-use crate::rpc::rpc_call;
+use crate::rpc::rpc_call_auth;
 
 pub async fn run(rpc_url: &str) -> Result<()> {
     println!("\n{}", style("Claim Bounty").cyan().bold());
@@ -28,42 +28,43 @@ pub async fn run(rpc_url: &str) -> Result<()> {
 
     let (pair, _seed) = Pair::from_phrase(mnemonic, None).context("Invalid mnemonic phrase")?;
 
-    let hotkey = sp_core::crypto::Ss58Codec::to_ss58check(&pair.public());
+    let hotkey_ss58 = sp_core::crypto::Ss58Codec::to_ss58check(&pair.public());
 
-    let timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)?
-        .as_secs() as i64;
-
-    let message = format!("claim_bounty:{}:{}:{}", hotkey, issue_url, timestamp);
-    let signature = pair.sign(message.as_bytes());
-    let sig_hex = hex::encode(signature.0);
-
-    println!("  {} {}", style("Hotkey:").dim(), style(&hotkey).green());
+    println!(
+        "  {} {}",
+        style("Hotkey:").dim(),
+        style(&hotkey_ss58).green()
+    );
     println!("  {} {}", style("Issue:").dim(), style(&issue_url).yellow());
 
+    // Body just contains the issue URL
+    // Authentication is done via X-Hotkey, X-Signature, X-Nonce headers
     let body = serde_json::json!({
-        "hotkey": hotkey,
         "issue_url": issue_url,
-        "signature": sig_hex,
-        "timestamp": timestamp,
     });
 
-    println!("{}", style("Submitting claim...").dim());
+    println!("{}", style("Submitting authenticated claim...").dim());
 
-    let result = rpc_call(rpc_url, "POST", "/claim", Some(body)).await?;
+    let result = rpc_call_auth(rpc_url, "POST", "/claim", Some(body), &pair).await?;
     let response_body = result.get("body").unwrap_or(&result);
 
-    if response_body.as_bool().unwrap_or(false) {
+    let success = response_body
+        .get("success")
+        .and_then(|v| v.as_bool())
+        .unwrap_or_else(|| response_body.as_bool().unwrap_or(false));
+
+    if success {
         println!(
             "\n{}",
             style("Claim submitted successfully!").green().bold()
         );
     } else {
-        let msg = response_body
-            .as_str()
-            .unwrap_or("Check that the issue is valid and closed with the 'valid' label.");
+        let error = response_body
+            .get("error")
+            .and_then(|v| v.as_str())
+            .unwrap_or("Check that the issue has both 'ide' and 'valid' labels.");
         println!("\n{}", style("Claim failed.").red().bold());
-        println!("  {}", msg);
+        println!("  Error: {}", error);
     }
 
     println!();

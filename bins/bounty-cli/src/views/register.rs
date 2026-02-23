@@ -3,7 +3,7 @@ use console::style;
 use dialoguer::{Input, Password};
 use sp_core::{crypto::Pair as PairTrait, sr25519::Pair};
 
-use crate::rpc::rpc_call;
+use crate::rpc::rpc_call_auth;
 
 pub async fn run(rpc_url: &str) -> Result<()> {
     println!("\n{}", style("Register GitHub Username").cyan().bold());
@@ -30,47 +30,48 @@ pub async fn run(rpc_url: &str) -> Result<()> {
 
     let (pair, _seed) = Pair::from_phrase(mnemonic, None).context("Invalid mnemonic phrase")?;
 
-    let hotkey = sp_core::crypto::Ss58Codec::to_ss58check(&pair.public());
+    let hotkey_ss58 = sp_core::crypto::Ss58Codec::to_ss58check(&pair.public());
 
-    let timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)?
-        .as_secs() as i64;
+    println!(
+        "  {} {}",
+        style("Hotkey:").dim(),
+        style(&hotkey_ss58).green()
+    );
 
-    let message = format!("register_github:{}:{}", github.to_lowercase(), timestamp);
-
-    let signature = pair.sign(message.as_bytes());
-    let sig_hex = hex::encode(signature.0);
-
-    println!("  {} {}", style("Hotkey:").dim(), style(&hotkey).green());
-    println!("  {} {}", style("Message:").dim(), style(&message).yellow());
-
+    // Body just contains the github username
+    // Authentication is done via X-Hotkey, X-Signature, X-Nonce headers
     let body = serde_json::json!({
-        "hotkey": hotkey,
         "github_username": github,
-        "signature": sig_hex,
-        "timestamp": timestamp,
     });
 
-    println!("{}", style("Sending registration...").dim());
+    println!("{}", style("Sending authenticated registration...").dim());
 
-    let result = rpc_call(rpc_url, "POST", "/register", Some(body)).await?;
+    let result = rpc_call_auth(rpc_url, "POST", "/register", Some(body), &pair).await?;
     let response_body = result.get("body").unwrap_or(&result);
-    let success = response_body.as_bool().unwrap_or(false);
+
+    // Check for success
+    let success = response_body
+        .get("success")
+        .and_then(|v| v.as_bool())
+        .unwrap_or_else(|| response_body.as_bool().unwrap_or(false));
 
     if success {
         println!(
             "\n{}",
             style(format!(
                 "Successfully registered '{}' with hotkey {}",
-                github, hotkey
+                github, hotkey_ss58
             ))
             .green()
             .bold()
         );
     } else {
+        let error = response_body
+            .get("error")
+            .and_then(|v| v.as_str())
+            .unwrap_or("Unknown error");
         println!("\n{}", style("Registration failed.").red().bold());
-        println!("  Check that the hotkey is registered on the subnet");
-        println!("  and the timestamp is within 5 minutes of server time.");
+        println!("  Error: {}", error);
     }
 
     println!();

@@ -1,10 +1,12 @@
+use alloc::string::ToString;
 use alloc::vec::Vec;
 use bincode::Options;
 use platform_challenge_sdk_wasm::host_functions::host_consensus_get_submission_count;
 use platform_challenge_sdk_wasm::{WasmRouteRequest, WasmRouteResponse};
 
 use crate::types::{
-    BountySubmission, IssueRecord, RegisterRequest, StatsResponse, StatusResponse, UserBalance,
+    BountySubmission, ClaimRequest, IssueRecord, RegisterRequest, StatsResponse, StatusResponse,
+    UserBalance,
 };
 use crate::{scoring, storage, validation};
 
@@ -152,6 +154,55 @@ pub fn handle_claim(request: &WasmRouteRequest) -> WasmRouteResponse {
         return bad_request_response();
     }
 
+    // Get authenticated hotkey from headers
+    let auth_hotkey = match &request.auth_hotkey {
+        Some(h) if !h.is_empty() => h.clone(),
+        _ => return unauthorized_response(),
+    };
+
+    // Try new JSON format first (ClaimRequest with issue_url)
+    if let Ok(claim_req) = serde_json::from_slice::<ClaimRequest>(&request.body) {
+        // Parse issue URL: https://github.com/{owner}/{repo}/issues/{number}
+        let parts: Vec<&str> = claim_req.issue_url.split('/').collect();
+        if parts.len() < 7 {
+            return bad_request_response();
+        }
+
+        let repo_owner = parts[3].to_string();
+        let repo_name = parts[4].to_string();
+        let issue_number: u32 = match parts[6].parse() {
+            Ok(n) => n,
+            Err(_) => return bad_request_response(),
+        };
+
+        // Get user's github username
+        let github_username = match storage::get_user_by_hotkey(&auth_hotkey) {
+            Some(reg) => reg.github_username,
+            None => return unauthorized_response(),
+        };
+
+        // Create submission from authenticated request
+        let submission = BountySubmission {
+            hotkey: auth_hotkey,
+            github_username,
+            issue_numbers: alloc::vec![issue_number],
+            repo_owner,
+            repo_name,
+            signature: alloc::vec![],
+            timestamp: 0,
+        };
+
+        let synced_issues = storage::get_synced_issues();
+        let result = validation::process_claims(&submission, &synced_issues);
+
+        if !result.claimed.is_empty() {
+            scoring::rebuild_leaderboard();
+        }
+
+        return ok_response(bincode::serialize(&result).unwrap_or_default());
+    }
+
+    // Fallback: try legacy bincode format (BountySubmission)
     let submission: BountySubmission = match bincode_options_route_body().deserialize(&request.body)
     {
         Ok(s) => s,
