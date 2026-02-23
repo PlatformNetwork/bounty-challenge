@@ -78,7 +78,8 @@ fn http_get(url: &str) -> Option<Vec<u8>> {
 }
 
 fn build_since_param() -> String {
-    let now = platform_challenge_sdk_wasm::host_functions::host_get_timestamp();
+    let now_ms = platform_challenge_sdk_wasm::host_functions::host_get_timestamp();
+    let now = now_ms / 1000; // host_get_timestamp returns milliseconds
     let since_ts = now - SECONDS_24H;
     // Format as ISO 8601: YYYY-MM-DDTHH:MM:SSZ
     let secs_per_day: i64 = 86400;
