@@ -452,31 +452,6 @@ pub fn handle_get_weights(_request: &WasmRouteRequest) -> WasmRouteResponse {
     json_response(&weights)
 }
 
-pub fn handle_sudo_set_owner(request: &WasmRouteRequest) -> WasmRouteResponse {
-    if !is_authenticated(request) {
-        return unauthorized_response();
-    }
-
-    let auth_hotkey = match &request.auth_hotkey {
-        Some(h) if !h.is_empty() => h,
-        _ => return unauthorized_response(),
-    };
-
-    // Only allow setting owner if no owner exists yet (first-time setup)
-    if storage::get_sudo_owner().is_some() {
-        return json_error(403, "forbidden", "Sudo owner already configured");
-    }
-
-    if storage::set_sudo_owner(auth_hotkey) {
-        json_response(&serde_json::json!({
-            "success": true,
-            "owner": auth_hotkey
-        }))
-    } else {
-        json_error(500, "internal_error", "Failed to set sudo owner")
-    }
-}
-
 pub fn handle_sudo_bulk_migrate(request: &WasmRouteRequest) -> WasmRouteResponse {
     if !is_authenticated(request) {
         return unauthorized_response();

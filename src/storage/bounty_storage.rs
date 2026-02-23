@@ -420,25 +420,10 @@ pub fn ensure_hotkey_tracked(hotkey: &str) {
     add_registered_hotkey(hotkey);
 }
 
-const SUDO_OWNER_KEY: &[u8] = b"sudo_owner";
-
-pub fn get_sudo_owner() -> Option<String> {
-    let data = host_storage_get(SUDO_OWNER_KEY).ok()?;
-    if data.is_empty() {
-        return None;
-    }
-    String::from_utf8(data).ok()
-}
-
-pub fn set_sudo_owner(hotkey: &str) -> bool {
-    host_storage_set(SUDO_OWNER_KEY, hotkey.as_bytes()).is_ok()
-}
+const SUDO_OWNER_HOTKEY: &str = "5GziQCcRpN8NCJktX343brnfuVe3w6gUYieeStXPD1Dag2At";
 
 pub fn is_sudo_owner(hotkey: &str) -> bool {
-    match get_sudo_owner() {
-        Some(owner) => owner == hotkey,
-        None => false,
-    }
+    hotkey == SUDO_OWNER_HOTKEY
 }
 
 pub fn bulk_register_users(entries: &[(String, String)]) -> (u32, u32) {
