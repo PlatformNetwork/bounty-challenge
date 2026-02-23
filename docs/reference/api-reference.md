@@ -8,12 +8,12 @@ All requests go through the Platform Network validator chain RPC:
 
 **HTTP REST:**
 ```
-http://VALIDATOR_IP:8080/challenge/bounty-challenge/
+https://chain.platform.network/challenge/bounty-challenge/
 ```
 
 **JSON-RPC:**
 ```
-POST http://VALIDATOR_IP:8080/rpc
+POST https://chain.platform.network/rpc
 ```
 
 > **Note**: The WASM module uses bincode serialization internally. The Platform validator handles JSON ↔ bincode translation for external clients.
@@ -471,7 +471,7 @@ import requests
 import time
 from substrateinterface import Keypair
 
-VALIDATOR_RPC = "http://VALIDATOR_IP:8080"
+VALIDATOR_RPC = "https://chain.platform.network"
 
 # Get leaderboard (HTTP REST)
 response = requests.get(f"{VALIDATOR_RPC}/challenge/bounty-challenge/leaderboard")
@@ -521,7 +521,7 @@ print(response.json())
 const { Keyring } = require('@polkadot/keyring');
 const { u8aToHex } = require('@polkadot/util');
 
-const VALIDATOR_RPC = 'http://VALIDATOR_IP:8080';
+const VALIDATOR_RPC = 'https://chain.platform.network';
 
 // Get leaderboard (HTTP REST)
 const leaderboard = await fetch(
@@ -570,7 +570,7 @@ async function register(mnemonic, githubUsername) {
 cargo build --release -p bounty-cli
 
 # Leaderboard
-./target/release/bounty-cli leaderboard --rpc-url http://VALIDATOR_IP:8080
+./target/release/bounty-cli leaderboard --rpc-url https://chain.platform.network
 
 # Register
 ./target/release/bounty-cli register \
@@ -578,13 +578,13 @@ cargo build --release -p bounty-cli
   --github johndoe \
   --signature 0xabc123...def456 \
   --timestamp 1705590000 \
-  --rpc-url http://VALIDATOR_IP:8080
+  --rpc-url https://chain.platform.network
 
 # Status
 ./target/release/bounty-cli status \
   --hotkey 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY \
-  --rpc-url http://VALIDATOR_IP:8080
+  --rpc-url https://chain.platform.network
 
 # Stats
-./target/release/bounty-cli stats --rpc-url http://VALIDATOR_IP:8080
+./target/release/bounty-cli stats --rpc-url https://chain.platform.network
 ```

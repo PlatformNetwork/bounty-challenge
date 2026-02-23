@@ -38,7 +38,7 @@ You'll see an interactive menu:
 
 ```
   bounty-challenge
-  RPC: http://VALIDATOR_IP:8080
+  RPC: https://chain.platform.network
 
 ? Select an action ›
 ❯ Leaderboard        (live dashboard)
@@ -113,13 +113,13 @@ You can also query the API directly via curl:
 
 ```bash
 # Get leaderboard
-curl http://VALIDATOR_IP:8080/challenge/bounty-challenge/leaderboard
+curl https://chain.platform.network/challenge/bounty-challenge/leaderboard
 
 # Get stats
-curl http://VALIDATOR_IP:8080/challenge/bounty-challenge/stats
+curl https://chain.platform.network/challenge/bounty-challenge/stats
 
 # Check status
-curl http://VALIDATOR_IP:8080/challenge/bounty-challenge/status/YOUR_HOTKEY
+curl https://chain.platform.network/challenge/bounty-challenge/status/YOUR_HOTKEY
 ```
 
 ## Tips

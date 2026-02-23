@@ -32,7 +32,7 @@ register_github:johndoe:1705590000
   --github JohnDoe \
   --signature 0xabc123...def456 \
   --timestamp 1705590000 \
-  --rpc-url http://VALIDATOR_IP:8080
+  --rpc-url https://chain.platform.network
 ```
 
 ### 3. Verify Registration
@@ -40,7 +40,7 @@ register_github:johndoe:1705590000
 ```bash
 ./target/release/bounty-cli status \
   --hotkey 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY \
-  --rpc-url http://VALIDATOR_IP:8080
+  --rpc-url https://chain.platform.network
 ```
 
 ## Generating the Signature
@@ -87,7 +87,7 @@ You can also register directly via the chain RPC without the CLI:
 ### Using curl (HTTP REST)
 
 ```bash
-curl -X POST http://VALIDATOR_IP:8080/challenge/bounty-challenge/register \
+curl -X POST https://chain.platform.network/challenge/bounty-challenge/register \
   -H "Content-Type: application/json" \
   -d '{
     "hotkey": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
@@ -100,7 +100,7 @@ curl -X POST http://VALIDATOR_IP:8080/challenge/bounty-challenge/register \
 ### Using JSON-RPC
 
 ```bash
-curl -X POST http://VALIDATOR_IP:8080/rpc \
+curl -X POST https://chain.platform.network/rpc \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
