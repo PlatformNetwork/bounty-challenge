@@ -194,7 +194,7 @@ pub fn fetch_and_process_issues() -> SyncStats {
             continue;
         }
 
-        if has_valid && is_closed && has_ide {
+        if has_valid && has_ide {
             // Award points
             if storage::record_valid_issue(
                 issue.number,
