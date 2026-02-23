@@ -98,6 +98,7 @@ pub struct StatsResponse {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct StatusResponse {
     pub registered: bool,
+    pub hotkey: String,
     pub github_username: Option<String>,
     pub valid_issues_count: u32,
     pub invalid_issues_count: u32,
@@ -187,6 +188,19 @@ pub struct GitHubUserDetailsResponse {
     pub invalid_issues: u64,
     pub open_issues: u64,
     pub recent_issues: Vec<IssueShort>,
+}
+
+/// A single entry in a bulk migration: links a GitHub username to a hotkey.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct MigrationEntry {
+    pub hotkey: String,
+    pub github_username: String,
+}
+
+/// Sudo request to bulk-register users (migration).
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct BulkMigrationRequest {
+    pub entries: Vec<MigrationEntry>,
 }
 
 pub use platform_challenge_sdk_wasm::{LlmMessage, LlmRequest, LlmResponse};

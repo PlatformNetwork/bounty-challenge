@@ -6,8 +6,8 @@ use platform_challenge_sdk_wasm::{WasmRouteRequest, WasmRouteResponse};
 use serde::Serialize;
 
 use crate::types::{
-    BountySubmission, ClaimRequest, GitHubUserDetailsResponse, IssueRecord, IssueShort,
-    IssuesStatsResponse, RegisterRequest, StatsResponse, StatusResponse, UserBalance,
+    BountySubmission, BulkMigrationRequest, ClaimRequest, GitHubUserDetailsResponse, IssueRecord,
+    IssueShort, IssuesStatsResponse, RegisterRequest, StatsResponse, StatusResponse, UserBalance,
 };
 use crate::{scoring, storage, validation};
 
@@ -104,6 +104,7 @@ pub fn handle_status(request: &WasmRouteRequest) -> WasmRouteResponse {
         None => {
             let status = StatusResponse {
                 registered: false,
+                hotkey: hotkey.to_string(),
                 github_username: None,
                 valid_issues_count: 0,
                 invalid_issues_count: 0,
@@ -123,6 +124,7 @@ pub fn handle_status(request: &WasmRouteRequest) -> WasmRouteResponse {
 
     let status = StatusResponse {
         registered: true,
+        hotkey: hotkey.to_string(),
         github_username: Some(reg.github_username),
         valid_issues_count: balance.valid_count,
         invalid_issues_count: balance.invalid_count,
@@ -317,6 +319,7 @@ pub fn handle_hotkey_details(request: &WasmRouteRequest) -> WasmRouteResponse {
 
     let status = StatusResponse {
         registered: true,
+        hotkey: hotkey.to_string(),
         github_username: Some(reg.github_username),
         valid_issues_count: balance.valid_count,
         invalid_issues_count: balance.invalid_count,
@@ -447,4 +450,85 @@ pub fn handle_get_weights(_request: &WasmRouteRequest) -> WasmRouteResponse {
     let entries = storage::get_leaderboard();
     let weights = scoring::calculate_weights_from_leaderboard(&entries);
     json_response(&weights)
+}
+
+pub fn handle_sudo_set_owner(request: &WasmRouteRequest) -> WasmRouteResponse {
+    if !is_authenticated(request) {
+        return unauthorized_response();
+    }
+
+    let auth_hotkey = match &request.auth_hotkey {
+        Some(h) if !h.is_empty() => h,
+        _ => return unauthorized_response(),
+    };
+
+    // Only allow setting owner if no owner exists yet (first-time setup)
+    if storage::get_sudo_owner().is_some() {
+        return json_error(403, "forbidden", "Sudo owner already configured");
+    }
+
+    if storage::set_sudo_owner(auth_hotkey) {
+        json_response(&serde_json::json!({
+            "success": true,
+            "owner": auth_hotkey
+        }))
+    } else {
+        json_error(500, "internal_error", "Failed to set sudo owner")
+    }
+}
+
+pub fn handle_sudo_bulk_migrate(request: &WasmRouteRequest) -> WasmRouteResponse {
+    if !is_authenticated(request) {
+        return unauthorized_response();
+    }
+
+    let auth_hotkey = match &request.auth_hotkey {
+        Some(h) if !h.is_empty() => h.clone(),
+        _ => return unauthorized_response(),
+    };
+
+    if !storage::is_sudo_owner(&auth_hotkey) {
+        return json_error(
+            403,
+            "forbidden",
+            "Only the sudo owner can perform bulk migration",
+        );
+    }
+
+    if request.body.len() > MAX_ROUTE_BODY_SIZE {
+        return bad_request_response();
+    }
+
+    let migration: BulkMigrationRequest = match serde_json::from_slice(&request.body) {
+        Ok(m) => m,
+        Err(_) => return json_error(400, "bad_request", "Invalid migration request JSON"),
+    };
+
+    if migration.entries.is_empty() {
+        return json_error(400, "bad_request", "No entries to migrate");
+    }
+
+    if migration.entries.len() > 1000 {
+        return json_error(400, "bad_request", "Maximum 1000 entries per batch");
+    }
+
+    let pairs: alloc::vec::Vec<(alloc::string::String, alloc::string::String)> = migration
+        .entries
+        .iter()
+        .map(|e| (e.hotkey.clone(), e.github_username.clone()))
+        .collect();
+
+    let (success, skipped) = storage::bulk_register_users(&pairs);
+
+    // Rebuild leaderboard after bulk migration
+    if success > 0 {
+        scoring::rebuild_leaderboard();
+    }
+
+    json_response(&serde_json::json!({
+        "success": true,
+        "registered": success,
+        "skipped": skipped,
+        "total": migration.entries.len()
+    }))
 }

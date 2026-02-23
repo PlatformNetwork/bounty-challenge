@@ -22,3 +22,5 @@ platform-challenge-sdk-wasm = { git = "https://github.com/PlatformNetwork/platfo
 serde = { version = "1.0", default-features = false, features = ["derive", "alloc"] }
 bincode = { version = "1.3", default-features = false }
 serde_json = "1.0.149"
+bs58 = { version = "0.5", default-features = false, features = ["alloc"] }
+blake2 = { version = "0.10", default-features = false }

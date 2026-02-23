@@ -78,6 +78,20 @@ pub fn get_route_definitions() -> Vec<WasmRouteDefinition> {
             description: String::from("Returns normalized weight assignments for all miners"),
             requires_auth: false,
         },
+        WasmRouteDefinition {
+            method: String::from("POST"),
+            path: String::from("/sudo/set_owner"),
+            description: String::from("Set the sudo owner hotkey (one-time setup, requires auth)"),
+            requires_auth: true,
+        },
+        WasmRouteDefinition {
+            method: String::from("POST"),
+            path: String::from("/sudo/bulk_migrate"),
+            description: String::from(
+                "Bulk register GitHub users linked to hotkeys (sudo owner only)",
+            ),
+            requires_auth: true,
+        },
     ]
 }
 
@@ -94,6 +108,8 @@ pub fn handle_route_request(request: &WasmRouteRequest) -> WasmRouteResponse {
         ("GET", "/issues/pending") => handlers::handle_issues_pending(request),
         ("GET", "/issues/stats") => handlers::handle_issues_stats(request),
         ("GET", "/get_weights") => handlers::handle_get_weights(request),
+        ("POST", "/sudo/set_owner") => handlers::handle_sudo_set_owner(request),
+        ("POST", "/sudo/bulk_migrate") => handlers::handle_sudo_bulk_migrate(request),
         _ => {
             if method == "GET" {
                 if path.starts_with("/status/") {

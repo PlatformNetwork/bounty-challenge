@@ -383,6 +383,8 @@ name = "bounty-challenge"
 version = "0.0.1"
 dependencies = [
  "bincode",
+ "blake2",
+ "bs58",
  "platform-challenge-sdk-wasm",
  "serde",
  "serde_json",

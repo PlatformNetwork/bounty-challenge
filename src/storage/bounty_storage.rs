@@ -1,9 +1,10 @@
-use alloc::string::String;
+use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use platform_challenge_sdk_wasm::host_functions::{
     host_consensus_get_epoch, host_storage_get, host_storage_set,
 };
 
+use crate::ss58;
 use crate::types::{
     InvalidIssueRecord, IssueRecord, LeaderboardEntry, UserBalance, UserRegistration,
 };
@@ -17,6 +18,11 @@ fn make_key(prefix: &[u8], suffix: &str) -> Vec<u8> {
     key
 }
 
+/// Normalize hotkey to SS58 for storage. Falls back to original if conversion fails.
+fn normalize_hotkey_for_storage(hotkey: &str) -> String {
+    ss58::normalize_hotkey(hotkey).unwrap_or_else(|| hotkey.to_string())
+}
+
 fn issue_key(repo_owner: &str, repo_name: &str, issue_number: u32) -> Vec<u8> {
     let mut key = Vec::from(b"issue:" as &[u8]);
     key.extend_from_slice(repo_owner.as_bytes());
@@ -28,14 +34,16 @@ fn issue_key(repo_owner: &str, repo_name: &str, issue_number: u32) -> Vec<u8> {
 }
 
 pub fn register_user(github_username: &str, hotkey: &str) -> bool {
+    let hotkey_ss58 = normalize_hotkey_for_storage(hotkey);
+
     let existing_hotkey = get_hotkey_by_github(github_username);
     if let Some(ref existing) = existing_hotkey {
-        if existing != hotkey {
+        if existing != &hotkey_ss58 {
             return false;
         }
     }
 
-    let existing_github = get_github_by_hotkey(hotkey);
+    let existing_github = get_github_by_hotkey(&hotkey_ss58);
     if let Some(ref existing) = existing_github {
         if existing.to_lowercase() != github_username.to_lowercase() {
             return false;
@@ -46,7 +54,7 @@ pub fn register_user(github_username: &str, hotkey: &str) -> bool {
     let current_epoch = if epoch >= 0 { epoch as u64 } else { 0 };
 
     let registration = UserRegistration {
-        hotkey: String::from(hotkey),
+        hotkey: hotkey_ss58.clone(),
         github_username: String::from(github_username),
         registered_epoch: current_epoch,
     };
@@ -56,13 +64,13 @@ pub fn register_user(github_username: &str, hotkey: &str) -> bool {
         Err(_) => return false,
     };
 
-    let user_key = make_key(b"user:", hotkey);
+    let user_key = make_key(b"user:", &hotkey_ss58);
     if host_storage_set(&user_key, &data).is_err() {
         return false;
     }
 
     let github_key = make_key(b"github:", &github_username.to_lowercase());
-    if host_storage_set(&github_key, hotkey.as_bytes()).is_err() {
+    if host_storage_set(&github_key, hotkey_ss58.as_bytes()).is_err() {
         return false;
     }
 
@@ -70,12 +78,25 @@ pub fn register_user(github_username: &str, hotkey: &str) -> bool {
 }
 
 pub fn get_user_by_hotkey(hotkey: &str) -> Option<UserRegistration> {
-    let key = make_key(b"user:", hotkey);
+    let hotkey_ss58 = normalize_hotkey_for_storage(hotkey);
+
+    // Try SS58 key first
+    let key = make_key(b"user:", &hotkey_ss58);
     let data = host_storage_get(&key).ok()?;
-    if data.is_empty() {
-        return None;
+    if !data.is_empty() {
+        return bincode::deserialize(&data).ok();
     }
-    bincode::deserialize(&data).ok()
+
+    // Fallback: try original key (for migration)
+    if hotkey != hotkey_ss58 {
+        let key = make_key(b"user:", hotkey);
+        let data = host_storage_get(&key).ok()?;
+        if !data.is_empty() {
+            return bincode::deserialize(&data).ok();
+        }
+    }
+
+    None
 }
 
 pub fn get_hotkey_by_github(github_username: &str) -> Option<String> {
@@ -84,7 +105,9 @@ pub fn get_hotkey_by_github(github_username: &str) -> Option<String> {
     if data.is_empty() {
         return None;
     }
-    String::from_utf8(data).ok()
+    let hotkey = String::from_utf8(data).ok()?;
+    // Normalize to SS58 on read
+    Some(normalize_hotkey_for_storage(&hotkey))
 }
 
 pub fn get_github_by_hotkey(hotkey: &str) -> Option<String> {
@@ -99,6 +122,7 @@ pub fn record_valid_issue(
     author: &str,
     hotkey: &str,
 ) -> bool {
+    let hotkey_ss58 = normalize_hotkey_for_storage(hotkey);
     let key = issue_key(repo_owner, repo_name, issue_number);
 
     // Check if issue already recorded (idempotent — consensus ensures
@@ -121,7 +145,7 @@ pub fn record_valid_issue(
         has_valid_label: true,
         has_invalid_label: false,
         has_ide_label: true,
-        claimed_by_hotkey: Some(String::from(hotkey)),
+        claimed_by_hotkey: Some(hotkey_ss58.clone()),
         recorded_epoch: current_epoch,
     };
 
@@ -134,7 +158,7 @@ pub fn record_valid_issue(
         return false;
     }
 
-    increment_valid_count(hotkey);
+    increment_valid_count(&hotkey_ss58);
     true
 }
 
@@ -374,4 +398,62 @@ pub fn get_validator_count() -> u64 {
 
 pub fn ensure_hotkey_tracked(hotkey: &str) {
     add_registered_hotkey(hotkey);
+}
+
+const SUDO_OWNER_KEY: &[u8] = b"sudo_owner";
+
+pub fn get_sudo_owner() -> Option<String> {
+    let data = host_storage_get(SUDO_OWNER_KEY).ok()?;
+    if data.is_empty() {
+        return None;
+    }
+    String::from_utf8(data).ok()
+}
+
+pub fn set_sudo_owner(hotkey: &str) -> bool {
+    host_storage_set(SUDO_OWNER_KEY, hotkey.as_bytes()).is_ok()
+}
+
+pub fn is_sudo_owner(hotkey: &str) -> bool {
+    match get_sudo_owner() {
+        Some(owner) => owner == hotkey,
+        None => false,
+    }
+}
+
+pub fn bulk_register_users(entries: &[(String, String)]) -> (u32, u32) {
+    let mut success_count = 0u32;
+    let mut skip_count = 0u32;
+
+    for (hotkey, github_username) in entries {
+        if hotkey.is_empty() || github_username.is_empty() {
+            skip_count += 1;
+            continue;
+        }
+
+        let existing_hotkey = get_hotkey_by_github(github_username);
+        if let Some(ref existing) = existing_hotkey {
+            if existing != hotkey {
+                skip_count += 1;
+                continue;
+            }
+        }
+
+        let existing_github = get_github_by_hotkey(hotkey);
+        if let Some(ref existing) = existing_github {
+            if existing.to_lowercase() != github_username.to_lowercase() {
+                skip_count += 1;
+                continue;
+            }
+        }
+
+        if register_user(github_username, hotkey) {
+            ensure_hotkey_tracked(hotkey);
+            success_count += 1;
+        } else {
+            skip_count += 1;
+        }
+    }
+
+    (success_count, skip_count)
 }

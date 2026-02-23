@@ -5,6 +5,7 @@ extern crate alloc;
 mod api;
 mod routes;
 mod scoring;
+pub mod ss58;
 pub mod storage;
 pub mod types;
 mod validation;
