@@ -19,6 +19,7 @@ body:
       description: Which project is affected?
       options:
         - cortex
+        - ide
         - term-challenge
         - vgrep
     validations:
