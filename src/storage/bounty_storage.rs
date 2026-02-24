@@ -170,7 +170,7 @@ pub fn record_invalid_issue(
     let epoch = host_consensus_get_epoch();
     let current_epoch = if epoch >= 0 { epoch as u64 } else { 0 };
 
-    let record = InvalidIssueRecord {
+    let inv_record = InvalidIssueRecord {
         issue_number,
         repo_owner: String::from(repo_owner),
         repo_name: String::from(repo_name),
@@ -179,20 +179,40 @@ pub fn record_invalid_issue(
         recorded_epoch: current_epoch,
     };
 
-    let mut key = Vec::from(b"invalid_issue:" as &[u8]);
-    key.extend_from_slice(repo_owner.as_bytes());
-    key.push(b'/');
-    key.extend_from_slice(repo_name.as_bytes());
-    key.push(b':');
-    key.extend_from_slice(&issue_number.to_le_bytes());
+    let mut inv_key = Vec::from(b"invalid_issue:" as &[u8]);
+    inv_key.extend_from_slice(repo_owner.as_bytes());
+    inv_key.push(b'/');
+    inv_key.extend_from_slice(repo_name.as_bytes());
+    inv_key.push(b':');
+    inv_key.extend_from_slice(&issue_number.to_le_bytes());
 
-    let data = match bincode::serialize(&record) {
+    let inv_data = match bincode::serialize(&inv_record) {
         Ok(d) => d,
         Err(_) => return false,
     };
 
-    if host_storage_set(&key, &data).is_err() {
+    if host_storage_set(&inv_key, &inv_data).is_err() {
         return false;
+    }
+
+    // Also write an IssueRecord under the canonical issue: key so
+    // get_issue_record/is_issue_recorded can detect label changes
+    let hotkey = get_hotkey_by_github(github_username);
+    let issue_record = IssueRecord {
+        issue_number,
+        repo_owner: String::from(repo_owner),
+        repo_name: String::from(repo_name),
+        author: String::from(github_username),
+        is_closed: true,
+        has_valid_label: false,
+        has_invalid_label: true,
+        has_ide_label: false,
+        claimed_by_hotkey: hotkey,
+        recorded_epoch: current_epoch,
+    };
+    let key = issue_key(repo_owner, repo_name, issue_number);
+    if let Ok(data) = bincode::serialize(&issue_record) {
+        let _ = host_storage_set(&key, &data);
     }
 
     true
@@ -217,6 +237,20 @@ pub fn get_issue_record(
         return None;
     }
     bincode::deserialize(&data).ok()
+}
+
+pub fn delete_issue_record(repo_owner: &str, repo_name: &str, issue_number: u32) {
+    // Clear both canonical key and invalid_issue key
+    let key = issue_key(repo_owner, repo_name, issue_number);
+    let _ = host_storage_set(&key, &[]);
+
+    let mut inv_key = Vec::from(b"invalid_issue:" as &[u8]);
+    inv_key.extend_from_slice(repo_owner.as_bytes());
+    inv_key.push(b'/');
+    inv_key.extend_from_slice(repo_name.as_bytes());
+    inv_key.push(b':');
+    inv_key.extend_from_slice(&issue_number.to_le_bytes());
+    let _ = host_storage_set(&inv_key, &[]);
 }
 
 pub fn get_user_balance(hotkey: &str) -> UserBalance {

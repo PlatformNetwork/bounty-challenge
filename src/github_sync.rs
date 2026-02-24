@@ -211,13 +211,35 @@ pub fn fetch_and_process_issues() -> SyncStats {
             None => continue,
         };
 
-        // Skip if already processed
-        if storage::is_issue_recorded(GITHUB_REPO_OWNER, GITHUB_REPO_NAME, issue.number) {
-            continue;
+        // Check if labels changed on an already-recorded issue
+        let existing = storage::get_issue_record(GITHUB_REPO_OWNER, GITHUB_REPO_NAME, issue.number);
+        if let Some(ref rec) = existing {
+            let was_valid = rec.has_valid_label && rec.has_ide_label && !rec.has_invalid_label;
+            let is_now_valid = has_valid && has_ide && !has_invalid;
+            let was_invalid = rec.has_invalid_label;
+            let is_now_invalid = has_invalid;
+
+            if was_valid == is_now_valid && was_invalid == is_now_invalid {
+                continue; // No label change
+            }
+            // Labels changed -- remove old record, will re-record below
+            storage::delete_issue_record(GITHUB_REPO_OWNER, GITHUB_REPO_NAME, issue.number);
+            // Reverse the old delta
+            if was_valid {
+                if let Some(ref hk) = rec.claimed_by_hotkey {
+                    let counter = valid_deltas.entry(hk.clone()).or_insert(0);
+                    *counter = counter.saturating_sub(1);
+                }
+            }
+            if was_invalid {
+                if let Some(hk) = storage::get_hotkey_by_github(&rec.author) {
+                    let counter = invalid_deltas.entry(hk).or_insert(0);
+                    *counter = counter.saturating_sub(1);
+                }
+            }
         }
 
         if has_valid && has_ide {
-            // Record issue (without incrementing balance)
             if storage::record_valid_issue(
                 issue.number,
                 GITHUB_REPO_OWNER,
