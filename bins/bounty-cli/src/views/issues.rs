@@ -4,6 +4,30 @@ use serde_json::Value;
 
 use crate::rpc::rpc_call;
 
+fn derive_status(issue: &Value) -> &'static str {
+    let has_valid = issue
+        .get("has_valid_label")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    let has_invalid = issue
+        .get("has_invalid_label")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    let has_duplicate = issue
+        .get("has_duplicate_label")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    if has_duplicate {
+        "duplicate"
+    } else if has_invalid {
+        "invalid"
+    } else if has_valid {
+        "valid"
+    } else {
+        "pending"
+    }
+}
+
 fn print_issues(data: &Value) {
     let body = data.get("body").unwrap_or(data);
     let arr = match body.as_array() {
@@ -20,48 +44,53 @@ fn print_issues(data: &Value) {
     }
 
     println!(
-        "  {:<6} {:<50} {:<12} {:<15}",
+        "  {:<6} {:<8} {:<30} {:<12} {:<15}",
         style("#").yellow(),
-        style("URL / Title").yellow(),
+        style("Issue").yellow(),
+        style("Repo").yellow(),
         style("Status").yellow(),
         style("Author").yellow(),
     );
-    println!("  {}", style("─".repeat(85)).dim());
+    println!("  {}", style("─".repeat(75)).dim());
 
     for (i, issue) in arr.iter().enumerate() {
-        let url = issue
-            .get("url")
-            .or_else(|| issue.get("issue_url"))
+        let issue_num = issue
+            .get("issue_number")
+            .and_then(|v| v.as_u64())
+            .map(|n| format!("#{}", n))
+            .unwrap_or_else(|| "?".to_string());
+
+        let repo = issue
+            .get("repo_name")
             .and_then(|v| v.as_str())
             .unwrap_or("?");
-        let title = issue.get("title").and_then(|v| v.as_str()).unwrap_or(url);
-        let display = if title.len() > 47 {
-            format!("{}...", &title[..47])
+        let owner = issue
+            .get("repo_owner")
+            .and_then(|v| v.as_str())
+            .unwrap_or("?");
+        let repo_display = format!("{}/{}", owner, repo);
+        let repo_short = if repo_display.len() > 28 {
+            format!("{}...", &repo_display[..25])
         } else {
-            title.to_string()
+            repo_display
         };
-        let status = issue
-            .get("status")
-            .or_else(|| issue.get("state"))
-            .and_then(|v| v.as_str())
-            .unwrap_or("unknown");
-        let author = issue
-            .get("author")
-            .or_else(|| issue.get("github_username"))
-            .and_then(|v| v.as_str())
-            .unwrap_or("?");
+
+        let status = derive_status(issue);
+        let author = issue.get("author").and_then(|v| v.as_str()).unwrap_or("?");
 
         let status_styled = match status {
-            "valid" | "closed" => style(status).green(),
-            "pending" | "open" => style(status).yellow(),
+            "valid" => style(status).green(),
+            "pending" => style(status).yellow(),
             "invalid" => style(status).red(),
+            "duplicate" => style(status).magenta(),
             _ => style(status).dim(),
         };
 
         println!(
-            "  {:<6} {:<50} {:<12} {:<15}",
+            "  {:<6} {:<8} {:<30} {:<12} {:<15}",
             i + 1,
-            display,
+            issue_num,
+            repo_short,
             status_styled,
             author,
         );
