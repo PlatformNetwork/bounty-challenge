@@ -1,6 +1,6 @@
 [package]
 name = "bounty-cli"
-version = "0.0.1"
+version = "0.1.0"
 edition = "2021"
 description = "Interactive TUI for Bounty Challenge on Platform Network"
 authors = ["CortexLM"]
