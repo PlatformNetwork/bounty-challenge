@@ -8,8 +8,76 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  build-wasm:
+    name: Build WASM
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "bounty-wasm"
+      - name: Build WASM
+        run: cargo build --release --target wasm32-unknown-unknown
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wasm
+          path: target/wasm32-unknown-unknown/release/bounty_challenge.wasm
+
+  build-cli:
+    name: Build CLI (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - name: linux-x86_64
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact: bounty-cli
+            output: bounty-cli-linux-x86_64
+          - name: macos-x86_64
+            os: macos-latest
+            target: x86_64-apple-darwin
+            artifact: bounty-cli
+            output: bounty-cli-darwin-x86_64
+          - name: macos-aarch64
+            os: macos-latest
+            target: aarch64-apple-darwin
+            artifact: bounty-cli
+            output: bounty-cli-darwin-aarch64
+          - name: windows-x86_64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact: bounty-cli.exe
+            output: bounty-cli-windows-x86_64.exe
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "bounty-cli-${{ matrix.name }}"
+      - name: Build CLI
+        run: cargo build --release -p bounty-cli --target ${{ matrix.target }}
+      - name: Rename artifact (unix)
+        if: runner.os != 'Windows'
+        run: |
+          cp target/${{ matrix.target }}/release/${{ matrix.artifact }} ${{ matrix.output }}
+          chmod +x ${{ matrix.output }}
+      - name: Rename artifact (windows)
+        if: runner.os == 'Windows'
+        run: cp target/${{ matrix.target }}/release/${{ matrix.artifact }} ${{ matrix.output }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cli-${{ matrix.name }}
+          path: ${{ matrix.output }}
+
   release:
-    name: Build and Release
+    name: Create Release
+    needs: [build-wasm, build-cli]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -18,43 +86,22 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32-unknown-unknown
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: "bounty-release"
-
-      # Get version from Cargo.toml
       - name: Get version
         id: version
         run: |
           VERSION=$(grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Version: $VERSION"
 
-      # Build WASM module
-      - name: Build WASM
-        run: cargo build --release --target wasm32-unknown-unknown
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
 
-      # Build CLI for multiple platforms
-      - name: Build CLI (Linux)
-        run: cargo build --release -p bounty-cli
-
-      # Create release artifacts
-      - name: Prepare artifacts
+      - name: Create checksums
         run: |
-          mkdir -p artifacts
-          cp target/wasm32-unknown-unknown/release/bounty_challenge.wasm artifacts/
-          cp target/release/bounty-cli artifacts/bounty-cli-linux-x86_64
-          chmod +x artifacts/bounty-cli-linux-x86_64
-          
-          # Create checksums
           cd artifacts
           sha256sum * > SHA256SUMS
 
-      # Check if tag exists
       - name: Check tag
         id: check_tag
         run: |
@@ -64,7 +111,6 @@ jobs:
             echo "exists=false" >> $GITHUB_OUTPUT
           fi
 
-      # Create release only if tag doesn't exist
       - name: Create Release
         if: steps.check_tag.outputs.exists == 'false'
         uses: softprops/action-gh-release@v1
@@ -75,19 +121,24 @@ jobs:
             ## Bounty Challenge v${{ steps.version.outputs.version }}
             
             ### Downloads
-            - `bounty-cli-linux-x86_64` - Linux CLI binary
-            - `bounty_challenge.wasm` - WASM module for validators
+            | Platform | Binary |
+            |----------|--------|
+            | Linux x86_64 | `bounty-cli-linux-x86_64` |
+            | macOS x86_64 | `bounty-cli-darwin-x86_64` |
+            | macOS ARM (M1/M2) | `bounty-cli-darwin-aarch64` |
+            | Windows x86_64 | `bounty-cli-windows-x86_64.exe` |
+            | WASM module | `bounty_challenge.wasm` |
             
             ### Installation
             ```bash
-            # Download CLI
-            curl -LO https://github.com/PlatformNetwork/bounty-challenge/releases/download/v${{ steps.version.outputs.version }}/bounty-cli-linux-x86_64
+            # Linux / macOS
+            curl -LO https://github.com/PlatformNetwork/bounty-challenge/releases/latest/download/bounty-cli-linux-x86_64
             chmod +x bounty-cli-linux-x86_64
             ./bounty-cli-linux-x86_64
             ```
             
-            ### Default RPC
             The CLI connects to `https://chain.platform.network` by default.
+            Set `BOUNTY_RPC_URL` to override.
           files: |
             artifacts/*
           draft: false

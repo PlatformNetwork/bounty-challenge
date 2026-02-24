@@ -47,6 +47,7 @@ pub struct SyncStats {
     pub fetched: u32,
     pub awarded: u32,
     pub penalized: u32,
+    pub last_error: Option<String>,
 }
 
 fn http_get(url: &str) -> Option<Vec<u8>> {
@@ -131,6 +132,7 @@ pub fn fetch_and_process_issues() -> SyncStats {
         fetched: 0,
         awarded: 0,
         penalized: 0,
+        last_error: None,
     };
 
     let since = build_since_param();
@@ -154,7 +156,15 @@ pub fn fetch_and_process_issues() -> SyncStats {
 
         let issues: Vec<GitHubIssue> = match serde_json::from_slice(&body) {
             Ok(v) => v,
-            Err(_) => break,
+            Err(e) => {
+                stats.last_error = Some(alloc::format!(
+                    "JSON parse error: {} (body_len={}, first_200={:?})",
+                    e,
+                    body.len(),
+                    core::str::from_utf8(&body[..body.len().min(200)]).unwrap_or("non-utf8")
+                ));
+                break;
+            }
         };
 
         let count = issues.len();
@@ -172,6 +182,11 @@ pub fn fetch_and_process_issues() -> SyncStats {
     }
 
     stats.fetched = all_issues.len() as u32;
+
+    // Accumulate balance deltas in memory to avoid read-after-write issues
+    // (P2P writes are not immediately visible to subsequent reads)
+    let mut valid_deltas: BTreeMap<String, u32> = BTreeMap::new();
+    let mut invalid_deltas: BTreeMap<String, u32> = BTreeMap::new();
 
     for issue in &all_issues {
         let author = match &issue.user {
@@ -202,7 +217,7 @@ pub fn fetch_and_process_issues() -> SyncStats {
         }
 
         if has_valid && has_ide {
-            // Award points
+            // Record issue (without incrementing balance)
             if storage::record_valid_issue(
                 issue.number,
                 GITHUB_REPO_OWNER,
@@ -211,9 +226,9 @@ pub fn fetch_and_process_issues() -> SyncStats {
                 &hotkey,
             ) {
                 stats.awarded += 1;
+                *valid_deltas.entry(hotkey).or_insert(0) += 1;
             }
         } else if has_invalid {
-            // Penalize
             let reason = if !is_closed {
                 "Issue marked invalid (not closed)"
             } else {
@@ -227,8 +242,34 @@ pub fn fetch_and_process_issues() -> SyncStats {
                 Some(reason),
             ) {
                 stats.penalized += 1;
+                *invalid_deltas.entry(hotkey).or_insert(0) += 1;
             }
         }
+    }
+
+    // Batch-write all balance updates: read once, apply all deltas, write once per hotkey
+    let mut all_hotkeys: BTreeMap<String, bool> = BTreeMap::new();
+    for k in valid_deltas.keys() {
+        all_hotkeys.insert(k.clone(), true);
+    }
+    for k in invalid_deltas.keys() {
+        all_hotkeys.insert(k.clone(), true);
+    }
+
+    for hotkey in all_hotkeys.keys() {
+        let mut balance = storage::get_user_balance(hotkey);
+        if let Some(&delta) = valid_deltas.get(hotkey) {
+            balance.valid_count = balance.valid_count.saturating_add(delta);
+        }
+        if let Some(&delta) = invalid_deltas.get(hotkey) {
+            balance.invalid_count = balance.invalid_count.saturating_add(delta);
+        }
+        let penalty = (balance
+            .invalid_count
+            .saturating_add(balance.duplicate_count))
+        .saturating_sub(balance.valid_count);
+        balance.is_penalized = penalty > 0;
+        storage::store_user_balance(hotkey, &balance);
     }
 
     stats

@@ -55,6 +55,25 @@ pub fn calculate_weights_from_leaderboard(entries: &[LeaderboardEntry]) -> Vec<W
         }
     }
 
+    // Gradual emission scaling: weights reach full (1.0) at MATURITY_THRESHOLD
+    // valid issues across the network. Below that, scale down with a sqrt curve
+    // so early contributors still get meaningful rewards but the system ramps up
+    // smoothly. The remainder goes to burn (UID 0) via fill_with_burn on the
+    // validator side.
+    const MATURITY_THRESHOLD: f64 = 100.0;
+    let total_valid: f64 = entries.iter().map(|e| e.valid_issues as f64).sum();
+    let scale = if total_valid >= MATURITY_THRESHOLD {
+        1.0
+    } else {
+        (total_valid / MATURITY_THRESHOLD).sqrt()
+    };
+
+    if scale < 1.0 {
+        for w in &mut weights {
+            w.weight *= scale;
+        }
+    }
+
     weights.sort_by(|a, b| {
         b.weight
             .partial_cmp(&a.weight)

@@ -6,6 +6,31 @@ use std::collections::HashMap;
 
 const CHALLENGE_ID: &str = "bounty-challenge";
 
+fn canonicalize_json(value: &Value) -> String {
+    match value {
+        Value::Object(map) => {
+            let mut pairs: Vec<_> = map.iter().collect();
+            pairs.sort_by(|(k1, _), (k2, _)| k1.cmp(k2));
+            let inner: Vec<String> = pairs
+                .iter()
+                .map(|(k, v)| {
+                    format!(
+                        "{}:{}",
+                        serde_json::to_string(k).unwrap_or_default(),
+                        canonicalize_json(v)
+                    )
+                })
+                .collect();
+            format!("{{{}}}", inner.join(","))
+        }
+        Value::Array(arr) => {
+            let inner: Vec<String> = arr.iter().map(canonicalize_json).collect();
+            format!("[{}]", inner.join(","))
+        }
+        _ => serde_json::to_string(value).unwrap_or_else(|_| "null".to_string()),
+    }
+}
+
 /// RPC call without authentication
 pub async fn rpc_call(
     rpc_url: &str,
@@ -30,7 +55,7 @@ pub async fn rpc_call_auth(
 ) -> Result<Value> {
     let body_bytes = body
         .as_ref()
-        .map(|b| serde_json::to_vec(b).unwrap_or_default())
+        .map(|b| canonicalize_json(b).into_bytes())
         .unwrap_or_default();
 
     // Create nonce: {timestamp}:{random}
@@ -40,7 +65,7 @@ pub async fn rpc_call_auth(
     let random: u64 = rand::random();
     let nonce = format!("{}:{:016x}", timestamp, random);
 
-    // Hash the body
+    // Hash the canonicalized body
     let body_hash = hex::encode(Sha256::digest(&body_bytes));
 
     // Create the signed message

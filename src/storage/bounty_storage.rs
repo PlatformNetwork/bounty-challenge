@@ -157,7 +157,6 @@ pub fn record_valid_issue(
         return false;
     }
 
-    increment_valid_count(&hotkey_ss58);
     true
 }
 
@@ -194,10 +193,6 @@ pub fn record_invalid_issue(
 
     if host_storage_set(&key, &data).is_err() {
         return false;
-    }
-
-    if let Some(hotkey) = get_hotkey_by_github(github_username) {
-        increment_invalid_count(&hotkey);
     }
 
     true
@@ -253,24 +248,12 @@ pub fn get_user_balance(hotkey: &str) -> UserBalance {
     result.unwrap_or_default()
 }
 
-fn store_user_balance(hotkey: &str, balance: &UserBalance) {
+pub fn store_user_balance(hotkey: &str, balance: &UserBalance) {
     let hotkey_ss58 = normalize_hotkey_for_storage(hotkey);
     let key = make_key(b"balance:", &hotkey_ss58);
     if let Ok(data) = bincode::serialize(balance) {
         let _ = host_storage_set(&key, &data);
     }
-}
-
-fn increment_valid_count(hotkey: &str) {
-    let hotkey_ss58 = normalize_hotkey_for_storage(hotkey);
-    let mut balance = get_user_balance(&hotkey_ss58);
-    balance.valid_count = balance.valid_count.saturating_add(1);
-    let penalty = (balance
-        .invalid_count
-        .saturating_add(balance.duplicate_count))
-    .saturating_sub(balance.valid_count);
-    balance.is_penalized = penalty > 0;
-    store_user_balance(&hotkey_ss58, &balance);
 }
 
 pub fn increment_duplicate_count(hotkey: &str) {
@@ -285,16 +268,74 @@ pub fn increment_duplicate_count(hotkey: &str) {
     store_user_balance(&hotkey_ss58, &balance);
 }
 
-fn increment_invalid_count(hotkey: &str) {
-    let hotkey_ss58 = normalize_hotkey_for_storage(hotkey);
-    let mut balance = get_user_balance(&hotkey_ss58);
-    balance.invalid_count = balance.invalid_count.saturating_add(1);
-    let penalty = (balance
-        .invalid_count
-        .saturating_add(balance.duplicate_count))
-    .saturating_sub(balance.valid_count);
-    balance.is_penalized = penalty > 0;
-    store_user_balance(&hotkey_ss58, &balance);
+/// Recount all balances by scanning stored issues. Returns JSON summary.
+pub fn recount_all_balances() -> serde_json::Value {
+    use alloc::collections::BTreeMap;
+
+    let valid_issues = get_synced_issues();
+    let mut valid_counts: BTreeMap<String, u32> = BTreeMap::new();
+    let mut invalid_counts: BTreeMap<String, u32> = BTreeMap::new();
+
+    for issue in &valid_issues {
+        if let Some(ref hotkey) = issue.claimed_by_hotkey {
+            if !hotkey.is_empty() && issue.has_valid_label && issue.has_ide_label {
+                *valid_counts.entry(hotkey.clone()).or_insert(0) += 1;
+            }
+        }
+    }
+
+    // Scan invalid issues
+    if let Ok(data) = host_storage_list_prefix(b"invalid_issue:", 50_000) {
+        if !data.is_empty() {
+            let pairs = decode_list_prefix(&data);
+            for (_k, v) in &pairs {
+                if let Ok(rec) = bincode::deserialize::<InvalidIssueRecord>(v) {
+                    if let Some(hotkey) = get_hotkey_by_github(&rec.github_username) {
+                        *invalid_counts.entry(hotkey).or_insert(0) += 1;
+                    }
+                }
+            }
+        }
+    }
+
+    let mut all_hotkeys: BTreeMap<String, bool> = BTreeMap::new();
+    for k in valid_counts.keys() {
+        all_hotkeys.insert(k.clone(), true);
+    }
+    for k in invalid_counts.keys() {
+        all_hotkeys.insert(k.clone(), true);
+    }
+    // Also include all registered hotkeys so we reset stale balances
+    for hk in get_registered_hotkeys() {
+        all_hotkeys.insert(hk, true);
+    }
+
+    let mut updated = 0u32;
+    for hotkey in all_hotkeys.keys() {
+        let mut balance = UserBalance::default();
+        // Preserve star_count and duplicate_count from existing balance
+        let old = get_user_balance(hotkey);
+        balance.star_count = old.star_count;
+        balance.duplicate_count = old.duplicate_count;
+
+        balance.valid_count = valid_counts.get(hotkey).copied().unwrap_or(0);
+        balance.invalid_count = invalid_counts.get(hotkey).copied().unwrap_or(0);
+        let penalty = (balance
+            .invalid_count
+            .saturating_add(balance.duplicate_count))
+        .saturating_sub(balance.valid_count);
+        balance.is_penalized = penalty > 0;
+        store_user_balance(hotkey, &balance);
+        updated += 1;
+    }
+
+    serde_json::json!({
+        "success": true,
+        "valid_issues_scanned": valid_issues.len(),
+        "hotkeys_updated": updated,
+        "unique_valid_hotkeys": valid_counts.len(),
+        "unique_invalid_hotkeys": invalid_counts.len()
+    })
 }
 
 pub fn get_leaderboard() -> Vec<LeaderboardEntry> {

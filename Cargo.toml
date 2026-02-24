@@ -7,7 +7,7 @@ resolver = "2"
 
 [package]
 name = "bounty-challenge"
-version = "0.0.1"
+version = "0.1.0"
 edition = "2021"
 description = "Bounty Challenge – WASM evaluation module for Platform Network"
 authors = ["CortexLM"]

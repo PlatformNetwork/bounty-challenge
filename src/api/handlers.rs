@@ -580,6 +580,27 @@ pub fn handle_sudo_sync_github(request: &WasmRouteRequest) -> WasmRouteResponse 
         "success": true,
         "fetched": stats.fetched,
         "awarded": stats.awarded,
-        "penalized": stats.penalized
+        "penalized": stats.penalized,
+        "error": stats.last_error
     }))
+}
+
+pub fn handle_sudo_recount(request: &WasmRouteRequest) -> WasmRouteResponse {
+    if !is_authenticated(request) {
+        return unauthorized_response();
+    }
+
+    let auth_hotkey = match &request.auth_hotkey {
+        Some(h) if !h.is_empty() => h.clone(),
+        _ => return unauthorized_response(),
+    };
+
+    if !storage::is_sudo_owner(&auth_hotkey) {
+        return json_error(403, "forbidden", "Only the sudo owner can recount");
+    }
+
+    let result = storage::recount_all_balances();
+    scoring::rebuild_leaderboard();
+
+    json_response(&result)
 }
