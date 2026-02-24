@@ -116,7 +116,13 @@ pub fn handle_status(request: &WasmRouteRequest) -> WasmRouteResponse {
     };
 
     let balance = storage::get_user_balance(hotkey);
-    let weight = if balance.is_penalized {
+    let net = scoring::calculate_net_points(
+        balance.valid_count,
+        balance.invalid_count,
+        balance.duplicate_count,
+        balance.star_count,
+    );
+    let weight = if storage::is_banned(hotkey) || net <= 0.0 {
         0.0
     } else {
         scoring::calculate_weight_from_points(balance.valid_count, balance.star_count)
@@ -311,7 +317,13 @@ pub fn handle_hotkey_details(request: &WasmRouteRequest) -> WasmRouteResponse {
     };
 
     let balance = storage::get_user_balance(hotkey);
-    let weight = if balance.is_penalized {
+    let net = scoring::calculate_net_points(
+        balance.valid_count,
+        balance.invalid_count,
+        balance.duplicate_count,
+        balance.star_count,
+    );
+    let weight = if storage::is_banned(hotkey) || net <= 0.0 {
         0.0
     } else {
         scoring::calculate_weight_from_points(balance.valid_count, balance.star_count)
@@ -603,4 +615,61 @@ pub fn handle_sudo_recount(request: &WasmRouteRequest) -> WasmRouteResponse {
     scoring::rebuild_leaderboard();
 
     json_response(&result)
+}
+
+#[derive(Debug, Deserialize)]
+struct BanRequest {
+    pub hotkey: alloc::string::String,
+}
+
+pub fn handle_sudo_ban_user(request: &WasmRouteRequest) -> WasmRouteResponse {
+    if !is_authenticated(request) {
+        return unauthorized_response();
+    }
+    let auth_hotkey = match &request.auth_hotkey {
+        Some(h) if !h.is_empty() => h.clone(),
+        _ => return unauthorized_response(),
+    };
+    if !storage::is_sudo_owner(&auth_hotkey) {
+        return json_error(403, "forbidden", "Only the sudo owner can ban users");
+    }
+    let req: BanRequest = match serde_json::from_slice(&request.body) {
+        Ok(r) => r,
+        Err(_) => return json_error(400, "bad_request", "Invalid request JSON"),
+    };
+    if req.hotkey.is_empty() {
+        return json_error(400, "bad_request", "hotkey required");
+    }
+    storage::ban_user(&req.hotkey);
+    scoring::rebuild_leaderboard();
+    json_response(&serde_json::json!({
+        "success": true,
+        "banned": req.hotkey
+    }))
+}
+
+pub fn handle_sudo_unban_user(request: &WasmRouteRequest) -> WasmRouteResponse {
+    if !is_authenticated(request) {
+        return unauthorized_response();
+    }
+    let auth_hotkey = match &request.auth_hotkey {
+        Some(h) if !h.is_empty() => h.clone(),
+        _ => return unauthorized_response(),
+    };
+    if !storage::is_sudo_owner(&auth_hotkey) {
+        return json_error(403, "forbidden", "Only the sudo owner can unban users");
+    }
+    let req: BanRequest = match serde_json::from_slice(&request.body) {
+        Ok(r) => r,
+        Err(_) => return json_error(400, "bad_request", "Invalid request JSON"),
+    };
+    if req.hotkey.is_empty() {
+        return json_error(400, "bad_request", "hotkey required");
+    }
+    storage::unban_user(&req.hotkey);
+    scoring::rebuild_leaderboard();
+    json_response(&serde_json::json!({
+        "success": true,
+        "unbanned": req.hotkey
+    }))
 }

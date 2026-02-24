@@ -41,7 +41,7 @@ pub fn calculate_net_points(
 pub fn calculate_weights_from_leaderboard(entries: &[LeaderboardEntry]) -> Vec<WeightAssignment> {
     let mut weights: Vec<WeightAssignment> = entries
         .iter()
-        .filter(|e| !e.is_penalized && e.net_points > 0.0)
+        .filter(|e| !crate::storage::is_banned(&e.hotkey) && e.net_points > 0.0)
         .map(|e| WeightAssignment {
             hotkey: e.hotkey.clone(),
             weight: e.net_points,

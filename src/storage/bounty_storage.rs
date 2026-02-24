@@ -596,3 +596,21 @@ pub fn get_pending_issues_count() -> u32 {
     let issues = get_pending_issues();
     issues.len() as u32
 }
+
+pub fn ban_user(hotkey: &str) {
+    let key = make_key(b"banned:", &normalize_hotkey_for_storage(hotkey));
+    let _ = host_storage_set(&key, &[1]);
+}
+
+pub fn unban_user(hotkey: &str) {
+    let key = make_key(b"banned:", &normalize_hotkey_for_storage(hotkey));
+    let _ = host_storage_set(&key, &[]);
+}
+
+pub fn is_banned(hotkey: &str) -> bool {
+    let key = make_key(b"banned:", &normalize_hotkey_for_storage(hotkey));
+    if let Ok(data) = host_storage_get(&key) {
+        return !data.is_empty();
+    }
+    false
+}
