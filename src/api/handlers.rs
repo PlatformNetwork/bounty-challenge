@@ -663,6 +663,7 @@ pub fn handle_sudo_sync_github(request: &WasmRouteRequest) -> WasmRouteResponse 
             });
 
     let stats = crate::github_sync::fetch_and_process_issues_with_token(github_token.as_deref());
+    storage::recount_all_balances();
     scoring::rebuild_leaderboard();
 
     json_response(&serde_json::json!({

@@ -138,6 +138,7 @@ pub fn perform_sync() -> SyncResult {
     let block = platform_challenge_sdk_wasm::host_functions::host_consensus_get_block_height();
     if block > 0 && block % 120 == 0 {
         crate::github_sync::fetch_and_process_issues();
+        storage::recount_all_balances();
     }
 
     rebuild_leaderboard();
