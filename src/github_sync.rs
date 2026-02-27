@@ -209,6 +209,10 @@ pub fn fetch_and_process_issues_with_token(github_token: Option<&str>) -> SyncSt
         };
 
         let label_names: Vec<String> = issue.labels.iter().map(|l| l.name.to_lowercase()).collect();
+        let has_ide = label_names.iter().any(|l| l == "ide");
+        if !has_ide {
+            continue;
+        }
         let has_valid = label_names.iter().any(|l| l == "valid");
         let has_invalid = label_names.iter().any(|l| l == "invalid");
         let has_duplicate = label_names
@@ -238,7 +242,7 @@ pub fn fetch_and_process_issues_with_token(github_token: Option<&str>) -> SyncSt
             is_closed,
             has_valid_label: has_valid && !has_invalid && !has_duplicate && !has_malicious,
             has_invalid_label: has_invalid && !has_malicious,
-            has_ide_label: false,
+            has_ide_label: has_ide,
             claimed_by_hotkey: hotkey,
             recorded_epoch: epoch,
             has_duplicate_label: has_duplicate && !has_malicious && !has_invalid,
