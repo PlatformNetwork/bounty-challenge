@@ -230,6 +230,24 @@ pub struct HotkeyDetailsResponse {
     pub recent_issues: Vec<IssueShort>,
 }
 
+/// Metrics attached to each evaluation for multi-validator aggregation.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct EvalMetrics {
+    pub claimed_count: u32,
+    pub rejected_count: u32,
+    pub total_valid: u32,
+    pub weight: f64,
+}
+
+/// Entry used in aggregation output leaderboard.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct AggregatedMinerEntry {
+    pub hotkey: String,
+    pub aggregated_score: f64,
+    pub validator_count: u32,
+    pub total_stake: u64,
+}
+
 pub use platform_challenge_sdk_wasm::{LlmMessage, LlmRequest, LlmResponse};
 
 /// Result of a sync operation for consensus

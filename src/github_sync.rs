@@ -9,7 +9,7 @@ const GITHUB_REPO_OWNER: &str = "PlatformNetwork";
 const GITHUB_REPO_NAME: &str = "bounty-challenge";
 const MAX_PAGES: u32 = 500;
 const ISSUES_PER_PAGE: usize = 100;
-const SECONDS_24H: i64 = 86_400;
+const SECONDS_48H: i64 = 172_800;
 
 #[derive(Serialize, Deserialize)]
 struct HttpGetRequest {
@@ -31,6 +31,7 @@ struct GitHubIssue {
     pub user: Option<GitHubUser>,
     pub labels: Vec<GitHubLabel>,
     pub state: String,
+    #[allow(dead_code)]
     pub created_at: Option<String>,
 }
 
@@ -88,7 +89,7 @@ fn http_get(url: &str, github_token: Option<&str>) -> Option<Vec<u8>> {
 fn build_since_param() -> String {
     let now_ms = platform_challenge_sdk_wasm::host_functions::host_get_timestamp();
     let now = now_ms / 1000; // host_get_timestamp returns milliseconds
-    let since_ts = now - SECONDS_24H;
+    let since_ts = now - SECONDS_48H;
     // Format as ISO 8601: YYYY-MM-DDTHH:MM:SSZ
     let secs_per_day: i64 = 86400;
     let secs_per_hour: i64 = 3600;
@@ -148,16 +149,17 @@ pub fn fetch_and_process_issues_with_token(github_token: Option<&str>) -> SyncSt
 
     let since = build_since_param();
     let mut all_issues: Vec<GitHubIssue> = Vec::new();
-    let mut hit_old_issue = false;
 
     let mut page = 1u32;
     loop {
         let mut url = String::from("https://api.github.com/repos/");
         use core::fmt::Write;
+        // Use &since= so the GitHub API only returns issues updated after
+        // the cutoff.  sort=updated&direction=desc ensures newest first.
         let _ = write!(
             url,
-            "{}/{}/issues?state=all&sort=created&direction=desc&per_page={}&page={}",
-            GITHUB_REPO_OWNER, GITHUB_REPO_NAME, ISSUES_PER_PAGE, page
+            "{}/{}/issues?state=all&sort=updated&direction=desc&per_page={}&page={}&since={}",
+            GITHUB_REPO_OWNER, GITHUB_REPO_NAME, ISSUES_PER_PAGE, page, since
         );
 
         let body = match http_get(&url, github_token) {
@@ -179,21 +181,9 @@ pub fn fetch_and_process_issues_with_token(github_token: Option<&str>) -> SyncSt
         };
 
         let count = issues.len();
+        all_issues.extend(issues);
 
-        for issue in issues {
-            let dominated = issue
-                .created_at
-                .as_deref()
-                .map(|ca| ca < since.as_str())
-                .unwrap_or(false);
-            if dominated {
-                hit_old_issue = true;
-                break;
-            }
-            all_issues.push(issue);
-        }
-
-        if hit_old_issue || count < ISSUES_PER_PAGE {
+        if count < ISSUES_PER_PAGE {
             break;
         }
         page += 1;
@@ -204,8 +194,10 @@ pub fn fetch_and_process_issues_with_token(github_token: Option<&str>) -> SyncSt
 
     stats.fetched = all_issues.len() as u32;
 
-    // Accumulate balance deltas in memory to avoid read-after-write issues
-    // (P2P writes are not immediately visible to subsequent reads)
+    // Do NOT purge all issues.  The &since= URL param already limits the
+    // GitHub response to issues updated in the last 24 h.  For each fetched
+    // issue we delete-then-rewrite its record, so label changes are picked
+    // up.  Issues older than 24 h that haven't changed stay untouched.
 
     for issue in &all_issues {
         let author = match &issue.user {

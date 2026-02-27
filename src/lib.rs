@@ -14,7 +14,10 @@ mod validation;
 use alloc::string::String;
 use alloc::vec::Vec;
 use bincode::Options;
-use platform_challenge_sdk_wasm::{Challenge, EvaluationInput, EvaluationOutput, WasmRouteRequest};
+use platform_challenge_sdk_wasm::{
+    AggregationInput, AggregationOutput, Challenge, EvaluationInput, EvaluationOutput,
+    WasmRouteRequest, WeightEntry,
+};
 
 use crate::types::BountySubmission;
 
@@ -112,7 +115,15 @@ impl Challenge for BountyChallengeWasm {
             ),
         );
 
-        EvaluationOutput::success(score, &message)
+        let metrics = bincode::serialize(&types::EvalMetrics {
+            claimed_count: claimed_count as u32,
+            rejected_count: rejected_count as u32,
+            total_valid: result.total_valid,
+            weight: result.score,
+        })
+        .unwrap_or_default();
+
+        EvaluationOutput::success(score, &message).with_metrics(metrics)
     }
 
     fn validate(&self, input: EvaluationInput) -> bool {
@@ -153,6 +164,113 @@ impl Challenge for BountyChallengeWasm {
     fn sync(&self) -> Vec<u8> {
         let result = scoring::perform_sync();
         bincode::serialize(&result).unwrap_or_default()
+    }
+
+    fn aggregate(&self, input: &[u8]) -> Vec<u8> {
+        let agg_input: AggregationInput = match bincode::deserialize(input) {
+            Ok(i) => i,
+            Err(_) => return Vec::new(),
+        };
+
+        if agg_input.evaluations.is_empty() {
+            return Vec::new();
+        }
+
+        use alloc::collections::BTreeMap;
+
+        // Group evaluations by miner hotkey.
+        // Each entry: (sum_of_weighted_scores, total_stake, validator_count)
+        let mut miner_scores: BTreeMap<String, (f64, u64, u32)> = BTreeMap::new();
+
+        for eval in &agg_input.evaluations {
+            let entry = miner_scores
+                .entry(eval.miner_hotkey.clone())
+                .or_insert((0.0, 0, 0));
+            let stake = if eval.validator_stake == 0 {
+                1u64
+            } else {
+                eval.validator_stake
+            };
+            entry.0 += eval.score * stake as f64;
+            entry.1 += stake;
+            entry.2 += 1;
+        }
+
+        // Build leaderboard entries from stake-weighted scores
+        let mut entries: Vec<types::LeaderboardEntry> = miner_scores
+            .iter()
+            .map(|(hotkey, (weighted_sum, total_stake, _vcount))| {
+                let avg_score = if *total_stake > 0 {
+                    weighted_sum / *total_stake as f64
+                } else {
+                    0.0
+                };
+                // Convert score back to net_points (score was score_f64_scaled * 10000)
+                let net_points = avg_score / 10_000.0;
+                types::LeaderboardEntry {
+                    rank: 0,
+                    hotkey: hotkey.clone(),
+                    github_username: String::new(),
+                    score: avg_score,
+                    valid_issues: 0,
+                    invalid_issues: 0,
+                    pending_issues: 0,
+                    star_count: 0,
+                    star_bonus: 0.0,
+                    net_points,
+                    is_penalized: false,
+                    last_epoch: agg_input.epoch,
+                    duplicate_issues: 0,
+                    malicious_issues: 0,
+                }
+            })
+            .filter(|e| e.net_points > 0.0)
+            .collect();
+
+        // Sort by net_points descending
+        entries.sort_by(|a, b| {
+            b.net_points
+                .partial_cmp(&a.net_points)
+                .unwrap_or(core::cmp::Ordering::Equal)
+        });
+        for (i, entry) in entries.iter_mut().enumerate() {
+            entry.rank = (i + 1) as u32;
+        }
+
+        // Compute weights from leaderboard
+        let weight_assignments = scoring::calculate_weights_from_leaderboard(&entries);
+
+        // Convert to WeightEntry format (need UID mapping)
+        // For now, use sequential UIDs since the on-chain mapping happens
+        // at the validator level when submitting weights.
+        let weights: Vec<WeightEntry> = weight_assignments
+            .iter()
+            .enumerate()
+            .map(|(i, wa)| WeightEntry {
+                uid: i as u16,
+                weight: (wa.weight * 65535.0) as u16,
+            })
+            .collect();
+
+        // Hash the leaderboard for consensus comparison
+        let leaderboard_data = bincode::serialize(&entries).unwrap_or_default();
+        let leaderboard_hash = {
+            use sha2::{Digest, Sha256};
+            let mut hasher = Sha256::new();
+            hasher.update(&leaderboard_data);
+            let result = hasher.finalize();
+            let mut hash = [0u8; 32];
+            hash.copy_from_slice(&result);
+            hash
+        };
+
+        let output = AggregationOutput {
+            leaderboard: leaderboard_data,
+            weights,
+            leaderboard_hash,
+        };
+
+        bincode::serialize(&output).unwrap_or_default()
     }
 }
 
