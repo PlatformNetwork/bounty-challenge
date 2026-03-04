@@ -109,6 +109,7 @@ pub struct StatsResponse {
     pub active_miners: u64,
     pub validator_count: u64,
     pub total_issues: u64,
+    pub last_refreshed: i64,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

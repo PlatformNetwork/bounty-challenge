@@ -79,12 +79,7 @@ fn get_param<'a>(request: &'a WasmRouteRequest, name: &str) -> Option<&'a str> {
 
 pub fn handle_leaderboard(_request: &WasmRouteRequest) -> WasmRouteResponse {
     let entries = scoring::rebuild_leaderboard();
-    let last_refreshed = crate::storage::get_last_refreshed();
-    let response = crate::types::LeaderboardResponse {
-        last_refreshed,
-        entries,
-    };
-    json_response(&response)
+    json_response(&entries)
 }
 
 pub fn handle_stats(_request: &WasmRouteRequest) -> WasmRouteResponse {
@@ -93,11 +88,13 @@ pub fn handle_stats(_request: &WasmRouteRequest) -> WasmRouteResponse {
     let validator_count = storage::get_validator_count();
     let issues = storage::get_synced_issues();
 
+    let last_refreshed = crate::storage::get_last_refreshed();
     let stats = StatsResponse {
         total_bounties: total_submissions,
         active_miners,
         validator_count,
         total_issues: issues.len() as u64,
+        last_refreshed,
     };
     json_response(&stats)
 }
