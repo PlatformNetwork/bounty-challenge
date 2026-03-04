@@ -207,18 +207,20 @@ pub fn rebuild_leaderboard() -> Vec<LeaderboardEntry> {
 
 /// Called every ~12s on the persistent WASM instance.
 /// Recount balances and rebuild leaderboard on every tick.
-/// Every 100 blocks (~20 min), also fetch fresh issues from GitHub.
+/// Every ~20 min, fetch fresh issues from GitHub (throttled by timestamp).
 pub fn background_tick() {
-    let block = platform_challenge_sdk_wasm::host_functions::host_consensus_get_block_height();
+    const GITHUB_FETCH_INTERVAL_MS: i64 = 20 * 60 * 1000;
 
-    if block > 0 && block % 100 == 0 {
+    let now = platform_challenge_sdk_wasm::host_functions::host_get_timestamp();
+    let last = storage::get_last_refreshed();
+
+    if last == 0 || (now - last) >= GITHUB_FETCH_INTERVAL_MS {
         crate::github_sync::fetch_and_process_issues();
     }
 
     storage::recount_all_balances();
     rebuild_leaderboard();
 
-    let now = platform_challenge_sdk_wasm::host_functions::host_get_timestamp();
     storage::store_last_refreshed(now);
 }
 
