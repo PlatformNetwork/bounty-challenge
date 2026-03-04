@@ -226,7 +226,16 @@ pub fn background_tick() {
 
 /// Perform a full sync: rebuild leaderboard and return sync result for consensus
 pub fn perform_sync() -> SyncResult {
-    // Recount from whatever issues are currently in storage.
+    const GITHUB_FETCH_INTERVAL_MS: i64 = 20 * 60 * 1000;
+
+    let now = platform_challenge_sdk_wasm::host_functions::host_get_timestamp();
+    let last = storage::get_last_refreshed();
+
+    if last == 0 || (now - last) >= GITHUB_FETCH_INTERVAL_MS {
+        crate::github_sync::fetch_and_process_issues();
+        storage::store_last_refreshed(now);
+    }
+
     storage::recount_all_balances();
 
     let entries = rebuild_leaderboard();
