@@ -161,6 +161,10 @@ impl Challenge for BountyChallengeWasm {
         bincode::serialize(&weights).unwrap_or_default()
     }
 
+    fn background_tick(&self) {
+        scoring::background_tick();
+    }
+
     fn sync(&self) -> Vec<u8> {
         let result = scoring::perform_sync();
         bincode::serialize(&result).unwrap_or_default()

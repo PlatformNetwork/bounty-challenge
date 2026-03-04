@@ -9,7 +9,7 @@ const GITHUB_REPO_OWNER: &str = "PlatformNetwork";
 const GITHUB_REPO_NAME: &str = "bounty-challenge";
 const MAX_PAGES: u32 = 500;
 const ISSUES_PER_PAGE: usize = 100;
-const SECONDS_72H: i64 = 259_200;
+const SECONDS_72H: i64 = 86_400;
 
 #[derive(Serialize, Deserialize)]
 struct HttpGetRequest {

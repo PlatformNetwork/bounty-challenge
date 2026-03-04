@@ -205,25 +205,25 @@ pub fn rebuild_leaderboard() -> Vec<LeaderboardEntry> {
     entries
 }
 
-/// Perform a full sync: rebuild leaderboard and return sync result for consensus
-pub fn perform_sync() -> SyncResult {
-    // Every 120 blocks, fetch GitHub issues and award/penalize.
-    // NOTE: recount_all_balances is called SEPARATELY (not right after
-    // fetch_and_process_issues) because issue writes go through P2P consensus
-    // and have not landed yet when recount runs.  Recount on every sync so
-    // that balances catch up with issues committed in previous cycles.
+/// Called every ~12s on the persistent WASM instance.
+/// Recount balances and rebuild leaderboard on every tick.
+/// Every 100 blocks (~20 min), also fetch fresh issues from GitHub.
+pub fn background_tick() {
     let block = platform_challenge_sdk_wasm::host_functions::host_consensus_get_block_height();
-    if block > 0 && block % 120 == 0 {
+
+    if block > 0 && block % 100 == 0 {
         crate::github_sync::fetch_and_process_issues();
     }
 
-    // Always recount from whatever issues are currently in storage.
-    // This catches issues committed from previous sync cycles.
+    storage::recount_all_balances();
+    rebuild_leaderboard();
+}
+
+/// Perform a full sync: rebuild leaderboard and return sync result for consensus
+pub fn perform_sync() -> SyncResult {
+    // Recount from whatever issues are currently in storage.
     storage::recount_all_balances();
 
-    // Use the returned entries directly -- the P2P write from
-    // rebuild_leaderboard may not have landed yet so a subsequent
-    // storage::get_leaderboard() would return stale data.
     let entries = rebuild_leaderboard();
     let hotkeys = storage::get_registered_hotkeys();
 
