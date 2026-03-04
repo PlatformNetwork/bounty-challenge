@@ -664,6 +664,10 @@ pub fn handle_sudo_sync_github(request: &WasmRouteRequest) -> WasmRouteResponse 
 
     let stats = crate::github_sync::fetch_and_process_issues_with_token(github_token.as_deref());
 
+    // Update last_refreshed timestamp
+    let now = platform_challenge_sdk_wasm::host_functions::host_get_timestamp();
+    storage::store_last_refreshed(now);
+
     // Verify blob read-back
     let issues_readback = storage::get_synced_issues();
 
