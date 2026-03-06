@@ -205,6 +205,22 @@ pub fn rebuild_leaderboard() -> Vec<LeaderboardEntry> {
     entries
 }
 
+/// Lazily fetch GitHub issues + recount if 20 min elapsed.
+/// Called from handle_route so it works even when sync/background_tick
+/// are not running (e.g. bootnode).
+pub fn maybe_refresh() {
+    const GITHUB_FETCH_INTERVAL_MS: i64 = 20 * 60 * 1000;
+
+    let now = platform_challenge_sdk_wasm::host_functions::host_get_timestamp();
+    let last = storage::get_last_refreshed();
+
+    if last == 0 || (now - last) >= GITHUB_FETCH_INTERVAL_MS {
+        crate::github_sync::fetch_and_process_issues();
+        storage::recount_all_balances();
+        storage::store_last_refreshed(now);
+    }
+}
+
 /// Called every ~12s on the persistent WASM instance.
 /// Recount balances and rebuild leaderboard on every tick.
 /// Every ~20 min, fetch fresh issues from GitHub (throttled by timestamp).

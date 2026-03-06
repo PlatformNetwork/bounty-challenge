@@ -9,7 +9,7 @@ const GITHUB_REPO_OWNER: &str = "PlatformNetwork";
 const GITHUB_REPO_NAME: &str = "bounty-challenge";
 const MAX_PAGES: u32 = 500;
 const ISSUES_PER_PAGE: usize = 100;
-const SECONDS_72H: i64 = 86_400;
+const SECONDS_24H: i64 = 86_400;
 
 #[derive(Serialize, Deserialize)]
 struct HttpGetRequest {
@@ -31,7 +31,6 @@ struct GitHubIssue {
     pub user: Option<GitHubUser>,
     pub labels: Vec<GitHubLabel>,
     pub state: String,
-    #[allow(dead_code)]
     pub created_at: Option<String>,
 }
 
@@ -89,7 +88,7 @@ fn http_get(url: &str, github_token: Option<&str>) -> Option<Vec<u8>> {
 fn build_since_param() -> String {
     let now_ms = platform_challenge_sdk_wasm::host_functions::host_get_timestamp();
     let now = now_ms / 1000; // host_get_timestamp returns milliseconds
-    let since_ts = now - SECONDS_72H;
+    let since_ts = now - SECONDS_24H;
     // Format as ISO 8601: YYYY-MM-DDTHH:MM:SSZ
     let secs_per_day: i64 = 86400;
     let secs_per_hour: i64 = 3600;
@@ -133,6 +132,35 @@ fn days_to_ymd(days_since_epoch: i64) -> (i64, i64, i64) {
     let m = if mp < 10 { mp + 3 } else { mp - 9 };
     let y = if m <= 2 { y + 1 } else { y };
     (y, m, d)
+}
+
+/// Parse ISO 8601 timestamp (e.g. "2026-03-04T12:00:00Z") to milliseconds since epoch.
+fn parse_iso8601_to_ms(s: &str) -> Option<i64> {
+    // Expected format: YYYY-MM-DDTHH:MM:SSZ
+    if s.len() < 20 {
+        return None;
+    }
+    let year: i64 = s[0..4].parse().ok()?;
+    let month: i64 = s[5..7].parse().ok()?;
+    let day: i64 = s[8..10].parse().ok()?;
+    let hour: i64 = s[11..13].parse().ok()?;
+    let min: i64 = s[14..16].parse().ok()?;
+    let sec: i64 = s[17..19].parse().ok()?;
+
+    // Convert to days since epoch using inverse of days_to_ymd
+    let (y, m) = if month <= 2 {
+        (year - 1, month + 9)
+    } else {
+        (year, month - 3)
+    };
+    let era = if y >= 0 { y } else { y - 399 } / 400;
+    let yoe = y - era * 400;
+    let doy = (153 * m + 2) / 5 + day - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    let days = era * 146097 + doe - 719468;
+
+    let ts = days * 86400 + hour * 3600 + min * 60 + sec;
+    Some(ts * 1000)
 }
 
 pub fn fetch_and_process_issues() -> SyncStats {
@@ -197,12 +225,23 @@ pub fn fetch_and_process_issues_with_token(github_token: Option<&str>) -> SyncSt
     // Ensure github:{username} -> hotkey index is populated
     storage::rebuild_github_index();
 
-    // Build the complete issue list from the 72h fetch, then overwrite the
+    // Build the complete issue list from the 24h fetch, then overwrite the
     // synced_issues blob in one shot so old issues never accumulate.
     let epoch = platform_challenge_sdk_wasm::host_functions::host_consensus_get_epoch() as u64;
+    let now_ms = platform_challenge_sdk_wasm::host_functions::host_get_timestamp();
+    let cutoff_ms = now_ms - (SECONDS_24H * 1000);
     let mut records: Vec<crate::types::IssueRecord> = Vec::new();
 
     for issue in &all_issues {
+        // Filter out issues created more than 24h ago
+        if let Some(ref created) = issue.created_at {
+            if let Some(created_ms) = parse_iso8601_to_ms(created) {
+                if created_ms < cutoff_ms {
+                    continue;
+                }
+            }
+        }
+
         let author = match &issue.user {
             Some(u) => u.login.to_lowercase(),
             None => continue,

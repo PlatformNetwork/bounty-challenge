@@ -78,6 +78,7 @@ fn get_param<'a>(request: &'a WasmRouteRequest, name: &str) -> Option<&'a str> {
 }
 
 pub fn handle_leaderboard(_request: &WasmRouteRequest) -> WasmRouteResponse {
+    scoring::maybe_refresh();
     let entries = scoring::rebuild_leaderboard();
     json_response(&entries)
 }
