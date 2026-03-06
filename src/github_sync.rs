@@ -260,10 +260,6 @@ pub fn fetch_and_process_issues_with_token(github_token: Option<&str>) -> SyncSt
         let has_malicious = label_names.iter().any(|l| l == "malicious");
         let is_closed = issue.state == "closed";
 
-        if !has_valid && !has_invalid && !has_duplicate && !has_malicious {
-            continue;
-        }
-
         // Find registered hotkey for this GitHub username
         let hotkey = storage::get_hotkey_by_github(&author);
 
@@ -279,12 +275,12 @@ pub fn fetch_and_process_issues_with_token(github_token: Option<&str>) -> SyncSt
             repo_name: GITHUB_REPO_NAME.into(),
             author: author.clone(),
             is_closed,
-            has_valid_label: has_valid && !has_invalid && !has_duplicate && !has_malicious,
-            has_invalid_label: has_invalid && !has_malicious,
+            has_valid_label: has_valid,
+            has_invalid_label: has_invalid,
             has_ide_label: has_ide,
             claimed_by_hotkey: hotkey,
             recorded_epoch: epoch,
-            has_duplicate_label: has_duplicate && !has_malicious && !has_invalid,
+            has_duplicate_label: has_duplicate,
             has_malicious_label: has_malicious,
         });
     }

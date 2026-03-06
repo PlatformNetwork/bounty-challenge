@@ -426,13 +426,16 @@ pub fn handle_issues_stats(_request: &WasmRouteRequest) -> WasmRouteResponse {
         } else {
             open += 1;
         }
-        if issue.has_valid_label {
+        if issue.has_valid_label
+            && !issue.has_invalid_label
+            && !issue.has_duplicate_label
+            && !issue.has_malicious_label
+        {
             valid += 1;
-        }
-        if issue.has_invalid_label {
+        } else if issue.has_invalid_label || issue.has_duplicate_label || issue.has_malicious_label
+        {
             invalid += 1;
-        }
-        if issue.is_closed && !issue.has_valid_label && !issue.has_invalid_label {
+        } else {
             pending += 1;
         }
     }
