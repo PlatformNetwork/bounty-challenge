@@ -164,7 +164,9 @@ fn parse_iso8601_to_ms(s: &str) -> Option<i64> {
 }
 
 pub fn fetch_and_process_issues() -> SyncStats {
-    fetch_and_process_issues_with_token(None)
+    let env_token = platform_challenge_sdk_wasm::host_functions::host_env_get("GITHUB_TOKEN")
+        .and_then(|b| alloc::string::String::from_utf8(b).ok());
+    fetch_and_process_issues_with_token(env_token.as_deref())
 }
 
 pub fn fetch_and_process_issues_with_token(github_token: Option<&str>) -> SyncStats {
@@ -175,19 +177,20 @@ pub fn fetch_and_process_issues_with_token(github_token: Option<&str>) -> SyncSt
         last_error: None,
     };
 
-    let since = build_since_param();
+    let _since = build_since_param();
     let mut all_issues: Vec<GitHubIssue> = Vec::new();
 
     let mut page = 1u32;
     loop {
         let mut url = String::from("https://api.github.com/repos/");
         use core::fmt::Write;
-        // Use &since= so the GitHub API only returns issues updated after
-        // the cutoff.  sort=updated&direction=desc ensures newest first.
+        // Fetch all issues sorted by creation date (newest first).
+        // We filter by created_at in post-processing. Avoid using &since=
+        // which filters on updated_at and causes accuracy issues.
         let _ = write!(
             url,
-            "{}/{}/issues?state=all&sort=updated&direction=desc&per_page={}&page={}&since={}",
-            GITHUB_REPO_OWNER, GITHUB_REPO_NAME, ISSUES_PER_PAGE, page, since
+            "{}/{}/issues?state=all&sort=created&direction=desc&per_page={}&page={}",
+            GITHUB_REPO_OWNER, GITHUB_REPO_NAME, ISSUES_PER_PAGE, page
         );
 
         let body = match http_get(&url, github_token) {
@@ -209,9 +212,26 @@ pub fn fetch_and_process_issues_with_token(github_token: Option<&str>) -> SyncSt
         };
 
         let count = issues.len();
+
+        // Early exit: since results are sorted by created desc, if the
+        // last issue on this page was created before the 24h cutoff we
+        // have all recent issues and can stop paginating.
+        let now_ms_check = platform_challenge_sdk_wasm::host_functions::host_get_timestamp();
+        let cutoff_check = now_ms_check - (SECONDS_24H * 1000);
+        let mut all_old = false;
+        if let Some(last) = issues.last() {
+            if let Some(ref created) = last.created_at {
+                if let Some(created_ms) = parse_iso8601_to_ms(created) {
+                    if created_ms < cutoff_check {
+                        all_old = true;
+                    }
+                }
+            }
+        }
+
         all_issues.extend(issues);
 
-        if count < ISSUES_PER_PAGE {
+        if all_old || count < ISSUES_PER_PAGE {
             break;
         }
         page += 1;

@@ -205,11 +205,11 @@ pub fn rebuild_leaderboard() -> Vec<LeaderboardEntry> {
     entries
 }
 
-/// Lazily fetch GitHub issues + recount if 20 min elapsed.
+/// Lazily fetch GitHub issues + recount if 30 min elapsed.
 /// Called from handle_route so it works even when sync/background_tick
 /// are not running (e.g. bootnode).
 pub fn maybe_refresh() {
-    const GITHUB_FETCH_INTERVAL_MS: i64 = 20 * 60 * 1000;
+    const GITHUB_FETCH_INTERVAL_MS: i64 = 30 * 60 * 1000;
 
     let now = platform_challenge_sdk_wasm::host_functions::host_get_timestamp();
     let last = storage::get_last_refreshed();
@@ -223,9 +223,9 @@ pub fn maybe_refresh() {
 
 /// Called every ~12s on the persistent WASM instance.
 /// Recount balances and rebuild leaderboard on every tick.
-/// Every ~20 min, fetch fresh issues from GitHub (throttled by timestamp).
+/// Every ~30 min, fetch fresh issues from GitHub (throttled by timestamp).
 pub fn background_tick() {
-    const GITHUB_FETCH_INTERVAL_MS: i64 = 20 * 60 * 1000;
+    const GITHUB_FETCH_INTERVAL_MS: i64 = 30 * 60 * 1000;
 
     let now = platform_challenge_sdk_wasm::host_functions::host_get_timestamp();
     let last = storage::get_last_refreshed();
@@ -241,7 +241,7 @@ pub fn background_tick() {
 
 /// Perform a full sync: rebuild leaderboard and return sync result for consensus
 pub fn perform_sync() -> SyncResult {
-    const GITHUB_FETCH_INTERVAL_MS: i64 = 20 * 60 * 1000;
+    const GITHUB_FETCH_INTERVAL_MS: i64 = 30 * 60 * 1000;
 
     let now = platform_challenge_sdk_wasm::host_functions::host_get_timestamp();
     let last = storage::get_last_refreshed();

@@ -24,9 +24,6 @@ pub fn validate_submission(submission: &BountySubmission) -> bool {
 }
 
 pub fn validate_issue(issue: &IssueRecord, expected_author: &str) -> (bool, Option<String>) {
-    if !issue.is_closed {
-        return (false, Some(String::from("Issue is not closed")));
-    }
     if !issue.has_ide_label {
         return (false, Some(String::from("Issue missing 'ide' label")));
     }
