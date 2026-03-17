@@ -54,6 +54,8 @@ pub struct IssueRecord {
     pub has_duplicate_label: bool,
     #[serde(default)]
     pub has_malicious_label: bool,
+    #[serde(default)]
+    pub created_at_ms: i64,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

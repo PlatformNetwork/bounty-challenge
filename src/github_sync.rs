@@ -253,13 +253,15 @@ pub fn fetch_and_process_issues_with_token(github_token: Option<&str>) -> SyncSt
     let mut records: Vec<crate::types::IssueRecord> = Vec::new();
 
     for issue in &all_issues {
+        let issue_created_ms = issue
+            .created_at
+            .as_ref()
+            .and_then(|c| parse_iso8601_to_ms(c))
+            .unwrap_or(0);
+
         // Filter out issues created more than 24h ago
-        if let Some(ref created) = issue.created_at {
-            if let Some(created_ms) = parse_iso8601_to_ms(created) {
-                if created_ms < cutoff_ms {
-                    continue;
-                }
-            }
+        if issue_created_ms > 0 && issue_created_ms < cutoff_ms {
+            continue;
         }
 
         let author = match &issue.user {
@@ -302,12 +304,48 @@ pub fn fetch_and_process_issues_with_token(github_token: Option<&str>) -> SyncSt
             recorded_epoch: epoch,
             has_duplicate_label: has_duplicate,
             has_malicious_label: has_malicious,
+            created_at_ms: issue_created_ms,
         });
     }
 
-    // Only overwrite the blob if we actually fetched something.
-    if !records.is_empty() {
-        storage::store_issue_data(&records);
+    // Merge with existing issues: keep existing data that wasn't re-fetched
+    // (e.g. due to rate limits) but update any that were re-fetched with
+    // fresh label state. Purge issues older than 24h.
+    let existing = storage::get_synced_issues();
+    let mut merged: Vec<crate::types::IssueRecord> = Vec::new();
+
+    // Index new records by (repo_owner, repo_name, issue_number) for fast lookup
+    let mut new_index = alloc::collections::BTreeMap::new();
+    for r in &records {
+        new_index.insert(
+            (r.repo_owner.clone(), r.repo_name.clone(), r.issue_number),
+            r,
+        );
+    }
+
+    // Keep existing issues that are still within 24h and were NOT re-fetched
+    // (re-fetched ones will be replaced by fresh data with updated labels)
+    for existing_issue in &existing {
+        let key = (
+            existing_issue.repo_owner.clone(),
+            existing_issue.repo_name.clone(),
+            existing_issue.issue_number,
+        );
+        if new_index.contains_key(&key) {
+            continue; // will be replaced by fresh data
+        }
+        // Purge issues older than 24h (if we know their creation time)
+        if existing_issue.created_at_ms > 0 && existing_issue.created_at_ms < cutoff_ms {
+            continue;
+        }
+        merged.push(existing_issue.clone());
+    }
+
+    // Add all freshly fetched records (they have up-to-date labels)
+    merged.extend(records);
+
+    if !merged.is_empty() {
+        storage::store_issue_data(&merged);
     }
 
     // Recount all balances from scratch

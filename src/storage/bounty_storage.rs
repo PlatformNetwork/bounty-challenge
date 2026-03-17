@@ -141,6 +141,7 @@ pub fn record_valid_issue(
         recorded_epoch: current_epoch,
         has_duplicate_label: false,
         has_malicious_label: false,
+        created_at_ms: 0,
     };
 
     let data = match bincode::serialize(&record) {
@@ -206,6 +207,7 @@ pub fn record_invalid_issue(
         recorded_epoch: current_epoch,
         has_duplicate_label: false,
         has_malicious_label: false,
+        created_at_ms: 0,
     };
     let key = issue_key(repo_owner, repo_name, issue_number);
     if let Ok(data) = bincode::serialize(&issue_record) {
@@ -241,6 +243,7 @@ pub fn record_duplicate_issue(
         recorded_epoch: current_epoch,
         has_duplicate_label: true,
         has_malicious_label: false,
+        created_at_ms: 0,
     };
 
     let data = match bincode::serialize(&record) {
@@ -297,6 +300,7 @@ pub fn record_malicious_issue(
         recorded_epoch: current_epoch,
         has_duplicate_label: false,
         has_malicious_label: true,
+        created_at_ms: 0,
     };
     let key = issue_key(repo_owner, repo_name, issue_number);
     if let Ok(data) = bincode::serialize(&record) {
@@ -638,6 +642,7 @@ impl LegacyIssueRecord {
             recorded_epoch: self.recorded_epoch,
             has_duplicate_label: self.has_duplicate_label,
             has_malicious_label: false,
+            created_at_ms: 0,
         }
     }
 }
