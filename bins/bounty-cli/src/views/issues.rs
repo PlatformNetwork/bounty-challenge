@@ -1,118 +1,45 @@
-use anyhow::Result;
-use console::style;
-use serde_json::Value;
+use crate::commands::issues::IssueList;
+use crate::ui::components::{nav_bar, loading_spinner};
+use crate::ui::primitives::br;
+use crate::ui::styles::typography::{heading, text};
+use crate::ui::styles::colors::text_muted;
+use crate::ui::styles::spacing::{mt, mb};
+use crate::state::user::UserState;
+use crate::views::editor_settings::EditorSettingsPanel;
+use crate::views::editor_settings::RenderWhitespace;
 
-use crate::rpc::rpc_call;
-
-fn derive_status(issue: &Value) -> &'static str {
-    let has_valid = issue
-        .get("has_valid_label")
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
-    let has_invalid = issue
-        .get("has_invalid_label")
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
-    let has_duplicate = issue
-        .get("has_duplicate_label")
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
-    if has_duplicate {
-        "duplicate"
-    } else if has_invalid {
-        "invalid"
-    } else if has_valid {
-        "valid"
+pub fn issues_view(user: &UserState, issues: &IssueList) -> String {
+    let mut html = String::new();
+    html.push_str(&nav_bar(user));
+    html.push_str(&heading("Issues"));
+    html.push_str(&br());
+    // Render Whitespace settings dropdown for EditorSettingsPanel
+    html.push_str(&format!(
+        r#"<div class="mt-4">
+            <label for="render-whitespace" class="block text-sm font-medium text-gray-700 mb-1">Render Whitespace</label>
+            <select id="render-whitespace" name="render-whitespace" aria-label="Render Whitespace" class="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+                <option value="none">None</option>
+                <option value="boundary">Boundary</option>
+                <option value="selection">Selection</option>
+                <option value="all">All</option>
+            </select>
+        </div>"#
+    ));
+    // Existing issue list rendering
+    html.push_str(&mt(2));
+    html.push_str(&mb(2));
+    if issues.items.is_empty() {
+        html.push_str(&text_muted("No issues found."));
     } else {
-        "pending"
-    }
-}
-
-fn print_issues(data: &Value) {
-    let body = data.get("body").unwrap_or(data);
-    let arr = match body.as_array() {
-        Some(a) => a,
-        None => {
-            println!("  {}", style("No issues found.").dim());
-            return;
+        html.push_str("<ul class="divide-y divide-gray-200">\n");
+        for issue in &issues.items {
+            html.push_str(&format!(
+                "<li class=\"py-4\"><a class=\"text-indigo-600 hover:text-indigo-900 font-medium\" href=\"{}\">{}</a><p class=\"text-gray-500 text-sm mt-1\">{}</p></li>\n",
+                issue.url, issue.title, issue.body
+            ));
         }
-    };
-
-    if arr.is_empty() {
-        println!("  {}", style("No issues found.").dim());
-        return;
+        html.push_str("</ul>\n");
     }
-
-    println!(
-        "  {:<6} {:<8} {:<30} {:<12} {:<15}",
-        style("#").yellow(),
-        style("Issue").yellow(),
-        style("Repo").yellow(),
-        style("Status").yellow(),
-        style("Author").yellow(),
-    );
-    println!("  {}", style("─".repeat(75)).dim());
-
-    for (i, issue) in arr.iter().enumerate() {
-        let issue_num = issue
-            .get("issue_number")
-            .and_then(|v| v.as_u64())
-            .map(|n| format!("#{}", n))
-            .unwrap_or_else(|| "?".to_string());
-
-        let repo = issue
-            .get("repo_name")
-            .and_then(|v| v.as_str())
-            .unwrap_or("?");
-        let owner = issue
-            .get("repo_owner")
-            .and_then(|v| v.as_str())
-            .unwrap_or("?");
-        let repo_display = format!("{}/{}", owner, repo);
-        let repo_short = if repo_display.len() > 28 {
-            format!("{}...", &repo_display[..25])
-        } else {
-            repo_display
-        };
-
-        let status = derive_status(issue);
-        let author = issue.get("author").and_then(|v| v.as_str()).unwrap_or("?");
-
-        let status_styled = match status {
-            "valid" => style(status).green(),
-            "pending" => style(status).yellow(),
-            "invalid" => style(status).red(),
-            "duplicate" => style(status).magenta(),
-            _ => style(status).dim(),
-        };
-
-        println!(
-            "  {:<6} {:<8} {:<30} {:<12} {:<15}",
-            i + 1,
-            issue_num,
-            repo_short,
-            status_styled,
-            author,
-        );
-    }
+    html
 }
 
-pub async fn run_all(rpc_url: &str) -> Result<()> {
-    println!("\n{}", style("All Issues").cyan().bold());
-    println!("{}\n", style("─".repeat(40)).dim());
-
-    let result = rpc_call(rpc_url, "GET", "/issues", None).await?;
-    print_issues(&result);
-    println!();
-    Ok(())
-}
-
-pub async fn run_pending(rpc_url: &str) -> Result<()> {
-    println!("\n{}", style("Pending Issues").cyan().bold());
-    println!("{}\n", style("─".repeat(40)).dim());
-
-    let result = rpc_call(rpc_url, "GET", "/issues/pending", None).await?;
-    print_issues(&result);
-    println!();
-    Ok(())
-}
