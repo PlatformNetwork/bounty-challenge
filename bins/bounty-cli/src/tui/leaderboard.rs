@@ -21,6 +21,7 @@ struct App {
     entries: Vec<LeaderboardEntry>,
     scroll_offset: usize,
     error: Option<String>,
+    selected_index: usize,
 }
 
 fn parse_entries(data: &Value) -> Vec<LeaderboardEntry> {
@@ -82,16 +83,26 @@ fn ui(frame: &mut Frame, app: &App) {
         .entries
         .iter()
         .skip(app.scroll_offset)
-        .map(|e| {
+        .enumerate()
+        .map(|(index, e)| {
+            let style = if index == app.selected_index {
+                Style::default().bg(Color::Rgb {
+                    r: 63,
+                    g: 63,
+                    b: 191,
+                })
+            } else {
+                Style::default()
+            };
             Row::new(vec![
-                Cell::from(e.rank.to_string()),
-                Cell::from(e.hotkey.clone()),
-                Cell::from(e.github.clone()),
-                Cell::from(format!("{:.2}", e.net_points)),
-                Cell::from(e.valid.to_string()),
-                Cell::from(e.invalid.to_string()),
-                Cell::from(e.stars.to_string()),
-                Cell::from(format!("{:.4}", e.weight)),
+                Cell::from(e.rank.to_string()).style(style),
+                Cell::from(e.hotkey.clone()).style(style),
+                Cell::from(e.github.clone()).style(style),
+                Cell::from(format!("{:.2}", e.net_points)).style(style),
+                Cell::from(e.valid.to_string()).style(style),
+                Cell::from(e.invalid.to_string()).style(style),
+                Cell::from(e.stars.to_string()).style(style),
+                Cell::from(format!("{:.4}", e.weight)).style(style),
             ])
         })
         .collect();
@@ -120,8 +131,7 @@ fn ui(frame: &mut Frame, app: &App) {
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(Color::Cyan))
                 .title(title),
-        )
-        .row_highlight_style(Style::default().bg(Color::DarkGray));
+        );
 
     frame.render_widget(table, chunks[0]);
 
@@ -137,6 +147,7 @@ pub async fn run(rpc_url: &str) -> Result<()> {
         entries: vec![],
         scroll_offset: 0,
         error: None,
+        selected_index: 0,
     };
 
     let mut last_fetch = Instant::now() - Duration::from_secs(10);
@@ -162,20 +173,20 @@ pub async fn run(rpc_url: &str) -> Result<()> {
                     match key.code {
                         KeyCode::Char('q') | KeyCode::Esc => break,
                         KeyCode::Up | KeyCode::Char('k') => {
-                            app.scroll_offset = app.scroll_offset.saturating_sub(1);
-                        }
-                        KeyCode::Down | KeyCode::Char('j') => {
-                            if app.scroll_offset + 1 < app.entries.len() {
-                                app.scroll_offset += 1;
+                            if app.selected_index > 0 {
+                                app.selected_index -= 1;
                             }
                         }
-                        _ => {}
+                        KeyCode::Down | KeyCode::Char('j') => {
+                            if app.selected_index + 1 < app.entries.len() - app.scroll_offset {
+                                app.selected_index += 1;
+                            }
+                        }
                     }
                 }
             }
         }
     }
 
-    super::restore_terminal(&mut terminal)?;
     Ok(())
 }
