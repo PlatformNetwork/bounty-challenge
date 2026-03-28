@@ -25,3 +25,37 @@ pub fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -
     terminal.show_cursor()?;
     Ok(())
 }
+
+pub struct TuiState {
+    pub minimize_button_hovered: bool,
+}
+
+impl Default for TuiState {
+    fn default() -> Self {
+        TuiState {
+            minimize_button_hovered: false,
+        }
+    }
+}
+
+pub fn render_minimize_button(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, state: &mut TuiState) -> Result<()> {
+    let button_style = if state.minimize_button_hovered {
+        Style::default().fg(Color::White).bg(Color::Gray)
+    } else {
+        Style::default().fg(Color::White).bg(Color::Transparent)
+    };
+
+    let button = Button::new("Minimize")
+        .style(button_style);
+
+    terminal.draw(|f| {
+        f.render_widget(button, Rect::new(0, 0, 10, 1));
+    })?;
+
+    Ok(())
+}
+
+pub fn handle_minimize_button_click(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, state: &mut TuiState) -> Result<()> {
+    // Handle minimize button click logic here
+    Ok(())
+}
