@@ -65,7 +65,7 @@ fn stat_block<'a>(label: &'a str, value: u64, color: Color) -> Paragraph<'a> {
     )
 }
 
-fn ui(frame: &mut Frame, stats: &StatsData, error: &Option<String>) {
+fn ui(frame: &mut Frame, stats: &StatsData, error: &Option<String>, is_sidebar_open: bool) {
     let outer = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -113,10 +113,16 @@ fn ui(frame: &mut Frame, stats: &StatsData, error: &Option<String>) {
         grid[3],
     );
 
-    let help = Paragraph::new(" q/Esc quit  |  auto-refresh 5s")
-        .style(Style::default().fg(Color::DarkGray))
+    let sidebar_toggle_color = if is_sidebar_open {
+        Color::Interactive::Active
+    } else {
+        Color::Interactive::Hover
+    };
+
+    let sidebar_toggle = Paragraph::new("Sidebar Toggle")
+        .style(Style::default().fg(sidebar_toggle_color).bold())
         .block(Block::default().borders(Borders::ALL));
-    frame.render_widget(help, outer[2]);
+    frame.render_widget(sidebar_toggle, outer[2]);
 }
 
 pub async fn run(rpc_url: &str) -> Result<()> {
@@ -124,6 +130,7 @@ pub async fn run(rpc_url: &str) -> Result<()> {
     let mut stats = StatsData::default();
     let mut error: Option<String> = None;
     let mut last_fetch = Instant::now() - Duration::from_secs(10);
+    let mut is_sidebar_open = false;
 
     loop {
         if last_fetch.elapsed() >= Duration::from_secs(5) {
@@ -137,7 +144,7 @@ pub async fn run(rpc_url: &str) -> Result<()> {
             last_fetch = Instant::now();
         }
 
-        terminal.draw(|f| ui(f, &stats, &error))?;
+        terminal.draw(|f| ui(f, &stats, &error, is_sidebar_open))?;
 
         if event::poll(Duration::from_millis(100))? {
             if let Event::Key(key) = event::read()? {
@@ -145,6 +152,8 @@ pub async fn run(rpc_url: &str) -> Result<()> {
                     && matches!(key.code, KeyCode::Char('q') | KeyCode::Esc)
                 {
                     break;
+                } else if key.kind == KeyEventKind::Press && matches!(key.code, KeyCode::Char('s')) {
+                    is_sidebar_open = !is_sidebar_open;
                 }
             }
         }
