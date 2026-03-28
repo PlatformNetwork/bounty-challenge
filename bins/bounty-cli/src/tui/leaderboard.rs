@@ -21,6 +21,20 @@ struct App {
     entries: Vec<LeaderboardEntry>,
     scroll_offset: usize,
     error: Option<String>,
+    minimize_button_style: Style,
+    close_button_style: Style,
+}
+
+impl App {
+    fn new() -> Self {
+        Self {
+            entries: vec![],
+            scroll_offset: 0,
+            error: None,
+            minimize_button_style: Style::default().fg(Color::Yellow),
+            close_button_style: Style::default().fg(Color::Red).bold(),
+        }
+    }
 }
 
 fn parse_entries(data: &Value) -> Vec<LeaderboardEntry> {
@@ -125,19 +139,17 @@ fn ui(frame: &mut Frame, app: &App) {
 
     frame.render_widget(table, chunks[0]);
 
-    let help = Paragraph::new(" ↑/↓ scroll  |  q/Esc quit  |  auto-refresh 5s")
-        .style(Style::default().fg(Color::DarkGray))
-        .block(Block::default().borders(Borders::ALL));
-    frame.render_widget(help, chunks[1]);
+    let minimize_button = Button::new("⏷").style(Style::default().fg(Color::Yellow));
+    let close_button = Button::new("❌").style(Style::default().fg(Color::Red).bold());
+    let buttons = Row::new(vec![minimize_button, close_button])
+        .align(Alignment::Right)
+        .padding(1);
+    frame.render_widget(buttons, chunks[1]);
 }
 
 pub async fn run(rpc_url: &str) -> Result<()> {
     let mut terminal = super::setup_terminal()?;
-    let mut app = App {
-        entries: vec![],
-        scroll_offset: 0,
-        error: None,
-    };
+    let mut app = App::new();
 
     let mut last_fetch = Instant::now() - Duration::from_secs(10);
     let refresh_interval = Duration::from_secs(5);
@@ -176,6 +188,4 @@ pub async fn run(rpc_url: &str) -> Result<()> {
         }
     }
 
-    super::restore_terminal(&mut terminal)?;
-    Ok(())
-}
+    super::rest
