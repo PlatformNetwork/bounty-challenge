@@ -69,14 +69,14 @@ See the [Registration Guide](registration.md) for detailed instructions on gener
 
 ## Step 4: Find and Report Issues
 
-1. **Find bugs** in [CortexLM/cortex-ide](https://github.com/CortexLM/cortex-ide)
+1. **Find bugs** in [CortexLM/cortex](https://github.com/CortexLM/cortex)
 2. **Submit issues** in [PlatformNetwork/bounty-challenge](https://github.com/PlatformNetwork/bounty-challenge/issues) (this repo!)
 3. **Include screenshots/videos** demonstrating the bug
 4. **Wait for review** — maintainers will close valid issues with `ide` + `valid` labels
 
 > **IMPORTANT**: 
-> - Look for bugs in **CortexLM/cortex-ide**
-> - Submit issues in **PlatformNetwork/bounty-challenge** (NOT in cortex-ide)
+> - Look for bugs in **CortexLM/cortex**
+> - Submit issues in **PlatformNetwork/bounty-challenge** (NOT in cortex)
 > - Issues must have BOTH `ide` AND `valid` labels to qualify
 
 ## Step 5: Claim Your Bounty

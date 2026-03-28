@@ -17,20 +17,20 @@ Bounty Challenge is a WASM evaluation module for [Platform Network](https://gith
 
 ## Target Project
 
-**Look for bugs in:** [CortexLM/cortex-ide](https://github.com/CortexLM/cortex-ide)
+**Look for bugs in:** [CortexLM/cortex](https://github.com/CortexLM/cortex)
 
 **Submit issues to:** [PlatformNetwork/bounty-challenge](https://github.com/PlatformNetwork/bounty-challenge/issues)
 
 ### Submission Rules
 
-1. **Find bugs** in [CortexLM/cortex-ide](https://github.com/CortexLM/cortex-ide)
-2. **Submit your issue** in [**this repository**](https://github.com/PlatformNetwork/bounty-challenge/issues) (NOT in cortex-ide)
+1. **Find bugs** in [CortexLM/cortex](https://github.com/CortexLM/cortex)
+2. **Submit your issue** in [**this repository**](https://github.com/PlatformNetwork/bounty-challenge/issues) (NOT in cortex)
 3. **Include screenshots and/or videos** demonstrating the bug
 4. **Wait for maintainers** to review and close the issue with `ide` + `valid` labels
 5. **Claim your bounty** once the issue is labeled and closed
 
 > **IMPORTANT**: 
-> - Submit issues in **PlatformNetwork/bounty-challenge**, NOT in CortexLM/cortex-ide
+> - Submit issues in **PlatformNetwork/bounty-challenge**, NOT in CortexLM/cortex
 > - Issues without screenshots/videos will be rejected
 > - Issues must have BOTH the `ide` AND `valid` labels to qualify for rewards
 
@@ -87,7 +87,7 @@ The signature is created by signing `register_github:{username_lowercase}:{times
 
 ### 4. Find and Report Issues
 
-1. Discover bugs in [CortexLM/cortex-ide](https://github.com/CortexLM/cortex-ide)
+1. Discover bugs in [CortexLM/cortex](https://github.com/CortexLM/cortex)
 2. Submit the issue in **[PlatformNetwork/bounty-challenge/issues](https://github.com/PlatformNetwork/bounty-challenge/issues)** (this repo!)
 3. **Include screenshots and/or videos** demonstrating the bug
 4. Wait for maintainers to review and close the issue with `ide` + `valid` labels
