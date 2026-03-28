@@ -21,6 +21,7 @@ struct App {
     entries: Vec<LeaderboardEntry>,
     scroll_offset: usize,
     error: Option<String>,
+    minimize_button_hovered: bool,
 }
 
 fn parse_entries(data: &Value) -> Vec<LeaderboardEntry> {
@@ -125,10 +126,19 @@ fn ui(frame: &mut Frame, app: &App) {
 
     frame.render_widget(table, chunks[0]);
 
+    let minimize_button = if app.minimize_button_hovered {
+        Button::new("Minimize")
+            .style(Style::default().fg(Color::White).bg(Color::DarkGray))
+    } else {
+        Button::new("Minimize")
+            .style(Style::default().fg(Color::White).bg(Color::Black))
+    };
+
     let help = Paragraph::new(" ↑/↓ scroll  |  q/Esc quit  |  auto-refresh 5s")
         .style(Style::default().fg(Color::DarkGray))
         .block(Block::default().borders(Borders::ALL));
     frame.render_widget(help, chunks[1]);
+    frame.render_widget(minimize_button, Rect::new(0, 0, 10, 1));
 }
 
 pub async fn run(rpc_url: &str) -> Result<()> {
@@ -137,6 +147,7 @@ pub async fn run(rpc_url: &str) -> Result<()> {
         entries: vec![],
         scroll_offset: 0,
         error: None,
+        minimize_button_hovered: false,
     };
 
     let mut last_fetch = Instant::now() - Duration::from_secs(10);
@@ -171,11 +182,22 @@ pub async fn run(rpc_url: &str) -> Result<()> {
                         }
                         _ => {}
                     }
+                } else if key.kind == KeyEventKind::Release {
+                    match key.code {
+                        KeyCode::Char('q') | KeyCode::Esc => {}
+                        _ => {}
+                    }
+                }
+            } else if let Event::Mouse(event) = event::read()? {
+                if event.kind == MouseEventKind::MouseMotion {
+                    if event.column >= 0 && event.column < 10 && event.row == 0 {
+                        app.minimize_button_hovered = true;
+                    } else {
+                        app.minimize_button_hovered = false;
+                    }
                 }
             }
         }
     }
-
-    super::restore_terminal(&mut terminal)?;
     Ok(())
 }
