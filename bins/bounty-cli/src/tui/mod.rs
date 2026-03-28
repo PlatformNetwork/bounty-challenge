@@ -25,3 +25,39 @@ pub fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -
     terminal.show_cursor()?;
     Ok(())
 }
+
+pub struct AuxiliarySidebarProps {
+    pub on_active_view_change: Box<dyn Fn(Option<String>) -> () + 'static>,
+}
+
+impl AuxiliarySidebarProps {
+    pub fn new(on_active_view_change: impl Fn(Option<String>) -> () + 'static) -> Self {
+        Self {
+            on_active_view_change: Box::new(on_active_view_change),
+        }
+    }
+}
+
+pub struct AuxiliarySidebar {
+    props: AuxiliarySidebarProps,
+    active_view_id: Option<String>,
+}
+
+impl AuxiliarySidebar {
+    pub fn new(props: AuxiliarySidebarProps) -> Self {
+        Self {
+            props,
+            active_view_id: None,
+        }
+    }
+
+    pub fn toggle(&mut self, view_id: String) {
+        if self.active_view_id == Some(view_id.clone()) {
+            self.active_view_id = None;
+            (self.props.on_active_view_change)(None);
+        } else {
+            self.active_view_id = Some(view_id.clone());
+            (self.props.on_active_view_change)(Some(view_id));
+        }
+    }
+}
