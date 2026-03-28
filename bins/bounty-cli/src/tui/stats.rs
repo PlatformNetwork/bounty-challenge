@@ -65,7 +65,7 @@ fn stat_block<'a>(label: &'a str, value: u64, color: Color) -> Paragraph<'a> {
     )
 }
 
-fn ui(frame: &mut Frame, stats: &StatsData, error: &Option<String>) {
+fn ui(frame: &mut Frame, stats: &StatsData, error: &Option<String>, active_view: &Option<String>) {
     let outer = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -117,6 +117,18 @@ fn ui(frame: &mut Frame, stats: &StatsData, error: &Option<String>) {
         .style(Style::default().fg(Color::DarkGray))
         .block(Block::default().borders(Borders::ALL));
     frame.render_widget(help, outer[2]);
+
+    if let Some(active_view) = active_view {
+        let active_view_text = Paragraph::new(format!("Active View: {}", active_view))
+            .style(Style::default().fg(Color::DarkGray))
+            .block(Block::default().borders(Borders::ALL));
+        frame.render_widget(active_view_text, outer[2]);
+    } else {
+        let no_active_view_text = Paragraph::new("No Active View")
+            .style(Style::default().fg(Color::DarkGray))
+            .block(Block::default().borders(Borders::ALL));
+        frame.render_widget(no_active_view_text, outer[2]);
+    }
 }
 
 pub async fn run(rpc_url: &str) -> Result<()> {
@@ -124,6 +136,7 @@ pub async fn run(rpc_url: &str) -> Result<()> {
     let mut stats = StatsData::default();
     let mut error: Option<String> = None;
     let mut last_fetch = Instant::now() - Duration::from_secs(10);
+    let mut active_view: Option<String> = None;
 
     loop {
         if last_fetch.elapsed() >= Duration::from_secs(5) {
@@ -137,7 +150,7 @@ pub async fn run(rpc_url: &str) -> Result<()> {
             last_fetch = Instant::now();
         }
 
-        terminal.draw(|f| ui(f, &stats, &error))?;
+        terminal.draw(|f| ui(f, &stats, &error, &active_view))?;
 
         if event::poll(Duration::from_millis(100))? {
             if let Event::Key(key) = event::read()? {
@@ -145,6 +158,18 @@ pub async fn run(rpc_url: &str) -> Result<()> {
                     && matches!(key.code, KeyCode::Char('q') | KeyCode::Esc)
                 {
                     break;
+                } else if key.kind == KeyEventKind::Press && matches!(key.code, KeyCode::Char('1')) {
+                    if active_view != Some("View 1".to_string()) {
+                        active_view = Some("View 1".to_string());
+                    } else {
+                        active_view = None;
+                    }
+                } else if key.kind == KeyEventKind::Press && matches!(key.code, KeyCode::Char('2')) {
+                    if active_view != Some("View 2".to_string()) {
+                        active_view = Some("View 2".to_string());
+                    } else {
+                        active_view = None;
+                    }
                 }
             }
         }
