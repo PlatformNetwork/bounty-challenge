@@ -65,7 +65,7 @@ fn stat_block<'a>(label: &'a str, value: u64, color: Color) -> Paragraph<'a> {
     )
 }
 
-fn ui(frame: &mut Frame, stats: &StatsData, error: &Option<String>) {
+fn ui(frame: &mut Frame, stats: &StatsData, error: &Option<String>, is_resizing: bool) {
     let outer = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -117,6 +117,13 @@ fn ui(frame: &mut Frame, stats: &StatsData, error: &Option<String>) {
         .style(Style::default().fg(Color::DarkGray))
         .block(Block::default().borders(Borders::ALL));
     frame.render_widget(help, outer[2]);
+
+    if is_resizing {
+        let resize_text = Paragraph::new("Resizing...")
+            .style(Style::default().fg(Color::Red).bold())
+            .block(Block::default().borders(Borders::ALL));
+        frame.render_widget(resize_text, outer[2]);
+    }
 }
 
 pub async fn run(rpc_url: &str) -> Result<()> {
@@ -124,6 +131,7 @@ pub async fn run(rpc_url: &str) -> Result<()> {
     let mut stats = StatsData::default();
     let mut error: Option<String> = None;
     let mut last_fetch = Instant::now() - Duration::from_secs(10);
+    let mut is_resizing = false;
 
     loop {
         if last_fetch.elapsed() >= Duration::from_secs(5) {
@@ -137,7 +145,7 @@ pub async fn run(rpc_url: &str) -> Result<()> {
             last_fetch = Instant::now();
         }
 
-        terminal.draw(|f| ui(f, &stats, &error))?;
+        terminal.draw(|f| ui(f, &stats, &error, is_resizing))?;
 
         if event::poll(Duration::from_millis(100))? {
             if let Event::Key(key) = event::read()? {
@@ -145,6 +153,13 @@ pub async fn run(rpc_url: &str) -> Result<()> {
                     && matches!(key.code, KeyCode::Char('q') | KeyCode::Esc)
                 {
                     break;
+                }
+            } else if let Event::Mouse(event) = event::read()? {
+                if event.kind == MouseEventKind::Down {
+                    is_resizing = true;
+                } else if event.kind == MouseEventKind::Up {
+                    is_resizing = false;
+                    terminal.draw(|f| ui(f, &stats, &error, is_resizing))?;
                 }
             }
         }
