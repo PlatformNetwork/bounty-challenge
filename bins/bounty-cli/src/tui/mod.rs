@@ -10,6 +10,8 @@ use crossterm::{
 use ratatui::prelude::*;
 use std::io;
 
+const ICON_SIZE: u16 = 14;
+
 pub fn setup_terminal() -> Result<Terminal<CrosstermBackend<io::Stdout>>> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -24,4 +26,8 @@ pub fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -
     execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
     terminal.show_cursor()?;
     Ok(())
+}
+
+pub fn get_icon_size() -> u16 {
+    ICON_SIZE
 }
