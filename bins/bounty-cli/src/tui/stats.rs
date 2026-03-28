@@ -65,6 +65,34 @@ fn stat_block<'a>(label: &'a str, value: u64, color: Color) -> Paragraph<'a> {
     )
 }
 
+fn close_button<'a>() -> Paragraph<'a> {
+    let text = vec![Line::from(Span::styled(
+        "X",
+        Style::default()
+            .fg(Color::Red)
+            .bg(Color::Black)
+            .add_modifier(Modifier::BOLD),
+    ))];
+    Paragraph::new(text)
+        .alignment(Alignment::Center)
+        .block(Block::default().borders(Borders::ALL))
+}
+
+fn minimize_button<'a>() -> Paragraph<'a> {
+    let text = vec![Line::from(Span::styled(
+        ">",
+        Style::default()
+            .fg(Color::Blue)
+            .bg(Color::Black)
+            .add_modifier(Modifier::BOLD),
+    ))];
+    Paragraph::new(text).alignment(Alignment::Center).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::Blue)),
+    )
+}
+
 fn ui(frame: &mut Frame, stats: &StatsData, error: &Option<String>) {
     let outer = Layout::default()
         .direction(Direction::Vertical)
@@ -112,6 +140,21 @@ fn ui(frame: &mut Frame, stats: &StatsData, error: &Option<String>) {
         stat_block("Total Issues", stats.total_issues, Color::Magenta),
         grid[3],
     );
+
+    let buttons = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Length(5), Constraint::Length(5)])
+        .split(outer[2]);
+
+    frame.render_widget(minimize_button(), buttons[0]);
+    let close_button_style = Style::default().fg(Color::Red).bg(Color::Black).add_modifier(Modifier::BOLD);
+    let close_button = Paragraph::new(vec![Line::from(Span::styled(
+        "X",
+        close_button_style,
+    ))])
+    .alignment(Alignment::Center)
+    .block(Block::default().borders(Borders::ALL).border_style(close_button_style));
+    frame.render_widget(close_button, buttons[1]);
 
     let help = Paragraph::new(" q/Esc quit  |  auto-refresh 5s")
         .style(Style::default().fg(Color::DarkGray))
