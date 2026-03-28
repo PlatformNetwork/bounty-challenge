@@ -1,0 +1,9 @@
+```rust
+"markdown" => {
+    body.push_str("<div class=\"cell markdown-cell\">\n");
+    let mut rendered = String::new();
+    pulldown_cmark::html::push_html(&mut rendered, pulldown_cmark::Parser::new(&source));
+    body.push_str(&rendered);
+    body.push_str("\n</div>\n");
+}
+```
