@@ -21,6 +21,7 @@ struct App {
     entries: Vec<LeaderboardEntry>,
     scroll_offset: usize,
     error: Option<String>,
+    active_view: Option<String>,
 }
 
 fn parse_entries(data: &Value) -> Vec<LeaderboardEntry> {
@@ -137,6 +138,7 @@ pub async fn run(rpc_url: &str) -> Result<()> {
         entries: vec![],
         scroll_offset: 0,
         error: None,
+        active_view: None,
     };
 
     let mut last_fetch = Instant::now() - Duration::from_secs(10);
@@ -174,8 +176,19 @@ pub async fn run(rpc_url: &str) -> Result<()> {
                 }
             }
         }
+
+        if let Some(active_view) = &app.active_view {
+            if let Event::Key(key) = event::read().unwrap() {
+                if key.kind == KeyEventKind::Press && key.code == KeyCode::Char(' ') {
+                    app.active_view = None;
+                }
+            }
+        } else {
+            if let Some(entry) = app.entries.get(app.scroll_offset) {
+                app.active_view = Some(entry.hotkey.clone());
+            }
+        }
     }
 
-    super::restore_terminal(&mut terminal)?;
     Ok(())
 }
