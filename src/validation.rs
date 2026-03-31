@@ -123,3 +123,11 @@ pub fn process_claims(submission: &BountySubmission, synced_issues: &[IssueRecor
         score,
     }
 }
+
+
+use sha2::{Sha256, Digest};
+pub fn hash_api_key(api_key: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(api_key.as_bytes());
+    format!("{:x}", hasher.finalize())
+}
