@@ -122,7 +122,14 @@ pub fn get_route_definitions() -> Vec<WasmRouteDefinition> {
 pub fn handle_route_request(request: &WasmRouteRequest) -> WasmRouteResponse {
     let path = request.path.as_str();
     let method = request.method.as_str();
-
+    let session_expired = request.session_expired;
+    if session_expired {
+        return WasmRouteResponse {
+            status: 302,
+            body: Vec::new(),
+            redirect: Some(String::from("/login")),
+        };
+    }
     match (method, path) {
         ("GET", "/leaderboard") => handlers::handle_leaderboard(request),
         ("GET", "/stats") => handlers::handle_stats(request),
