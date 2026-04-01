@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use console::style;
 use dialoguer::{Input, Password};
 use sp_core::{crypto::Pair as PairTrait, sr25519::Pair};
@@ -27,37 +27,39 @@ pub async fn run(rpc_url: &str) -> Result<()> {
         );
     }
 
-    match Mnemonic::parse_in(Language::English, mnemonic) {
-        Ok(_) => {}
+    let pair = match Pair::from_phrase(mnemonic, None) {
+        Ok((pair, _seed)) => pair,
         Err(e) => {
-            let error_msg = format!("{}", e);
-            if error_msg.contains("Invalid word") || error_msg.contains("not in wordlist") {
-                let wordlist = Language::English.word_list();
-                let wordlist_set: std::collections::HashSet<&str> = wordlist.iter().copied().collect();
-                let invalid_words: Vec<&str> = words.iter()
-                    .filter(|w| !wordlist_set.contains(w.to_lowercase().as_str()))
-                    .copied()
-                    .collect();
-                
-                if !invalid_words.is_empty() {
-                    anyhow::bail!(
-                        "Invalid mnemonic: Unknown word(s) not in BIP39 wordlist: '{}'. \
-                         Check for typos. All words must be lowercase English words.",
-                        invalid_words.join("', '")
-                    );
+            let error_detail = match Mnemonic::parse_in(Language::English, mnemonic) {
+                Ok(_) => format!("{}", e),
+                Err(bip39_err) => {
+                    let error_msg = format!("{}", bip39_err);
+                    if error_msg.contains("Invalid word") || error_msg.contains("unknown") {
+                        let wordlist = Language::English.word_list();
+                        let wordlist_set: std::collections::HashSet<&str> = 
+                            wordlist.iter().copied().collect();
+                        let invalid_words: Vec<&str> = words.iter()
+                            .filter(|w| !wordlist_set.contains(w.to_lowercase().as_str()))
+                            .copied()
+                            .collect();
+                        
+                        if !invalid_words.is_empty() {
+                            let words_str = invalid_words.join("', '");
+                            format!("Unknown word(s) not in BIP39 wordlist: '{}'. \
+                                    Check for typos. All words must be lowercase.", words_str)
+                        } else {
+                            error_msg
+                        }
+                    } else if error_msg.contains("checksum") {
+                        "Invalid checksum. The last word may be incorrect or the mnemonic may be corrupted.".to_string()
+                    } else {
+                        error_msg
+                    }
                 }
-            }
-            anyhow::bail!(
-                "Invalid mnemonic: {}. \
-                 Make sure all words are spelled correctly and are lowercase. \
-                 Common issues: typos, uppercase letters, extra spaces, or words not in the BIP39 English wordlist.",
-                error_msg
-            );
+            };
+            anyhow::bail!("Invalid mnemonic: {}", error_detail);
         }
     };
-
-    let (pair, _seed) = Pair::from_phrase(mnemonic, None)
-        .context("Failed to derive keypair from mnemonic. This should not happen if validation passed.")?;
 
     let hotkey_ss58 = sp_core::crypto::Ss58Codec::to_ss58check(&pair.public());
 
