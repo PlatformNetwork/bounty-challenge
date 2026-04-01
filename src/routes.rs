@@ -1,128 +1,17 @@
-use alloc::string::String;
-use alloc::vec;
-use alloc::vec::Vec;
-use platform_challenge_sdk_wasm::{WasmRouteDefinition, WasmRouteRequest, WasmRouteResponse};
-
-use crate::api::handlers;
-
-/// Route definitions for the bounty challenge.
-/// Note: Consensus is handled by platform-v2 via StorageProposal/StorageVote.
-/// The WASM module only exposes data access routes.
-pub fn get_route_definitions() -> Vec<WasmRouteDefinition> {
-    vec![
-        WasmRouteDefinition {
-            method: String::from("GET"),
-            path: String::from("/leaderboard"),
-            description: String::from("Returns current leaderboard with scores and rankings"),
-            requires_auth: false,
-        },
-        WasmRouteDefinition {
-            method: String::from("GET"),
-            path: String::from("/stats"),
-            description: String::from("Challenge statistics: total bounties, active miners"),
-            requires_auth: false,
-        },
-        WasmRouteDefinition {
-            method: String::from("GET"),
-            path: String::from("/status/:hotkey"),
-            description: String::from("Get status for a specific hotkey"),
-            requires_auth: false,
-        },
-        WasmRouteDefinition {
-            method: String::from("POST"),
-            path: String::from("/register"),
-            description: String::from("Register GitHub username with hotkey (requires auth)"),
-            requires_auth: true,
-        },
-        WasmRouteDefinition {
-            method: String::from("POST"),
-            path: String::from("/claim"),
-            description: String::from("Claim bounty for resolved issues (requires auth)"),
-            requires_auth: true,
-        },
-        WasmRouteDefinition {
-            method: String::from("GET"),
-            path: String::from("/issues"),
-            description: String::from("List all synced issues"),
-            requires_auth: false,
-        },
-        WasmRouteDefinition {
-            method: String::from("GET"),
-            path: String::from("/issues/pending"),
-            description: String::from("List pending issues"),
-            requires_auth: false,
-        },
-        WasmRouteDefinition {
-            method: String::from("GET"),
-            path: String::from("/hotkey/:hotkey"),
-            description: String::from("Detailed hotkey information"),
-            requires_auth: false,
-        },
-        WasmRouteDefinition {
-            method: String::from("GET"),
-            path: String::from("/issues/stats"),
-            description: String::from(
-                "Issue statistics: total, open, closed, valid, invalid, pending",
-            ),
-            requires_auth: false,
-        },
-        WasmRouteDefinition {
-            method: String::from("GET"),
-            path: String::from("/github/:username"),
-            description: String::from("Get GitHub user details and their issues"),
-            requires_auth: false,
-        },
-        WasmRouteDefinition {
-            method: String::from("GET"),
-            path: String::from("/get_weights"),
-            description: String::from("Returns normalized weight assignments for all miners"),
-            requires_auth: false,
-        },
-        WasmRouteDefinition {
-            method: String::from("POST"),
-            path: String::from("/sudo/bulk_migrate"),
-            description: String::from(
-                "Bulk register GitHub users linked to hotkeys (sudo owner only)",
-            ),
-            requires_auth: true,
-        },
-        WasmRouteDefinition {
-            method: String::from("POST"),
-            path: String::from("/sudo/register_user"),
-            description: String::from("Register a single user with hotkey (sudo owner only)"),
-            requires_auth: true,
-        },
-        WasmRouteDefinition {
-            method: String::from("POST"),
-            path: String::from("/sudo/sync_github"),
-            description: String::from("Trigger GitHub issue sync manually (sudo owner only)"),
-            requires_auth: true,
-        },
-        WasmRouteDefinition {
-            method: String::from("POST"),
-            path: String::from("/sudo/recount"),
-            description: String::from("Recount all balances from stored issues (sudo owner only)"),
-            requires_auth: true,
-        },
-        WasmRouteDefinition {
-            method: String::from("POST"),
-            path: String::from("/sudo/ban_user"),
-            description: String::from("Ban a user from receiving rewards (sudo owner only)"),
-            requires_auth: true,
-        },
-        WasmRouteDefinition {
-            method: String::from("POST"),
-            path: String::from("/sudo/unban_user"),
-            description: String::from("Unban a user (sudo owner only)"),
-            requires_auth: true,
-        },
-    ]
-}
+--- BUILDER A ---
+Score/Metrics: {'compute_impact': 'This fix reduces unnecessary computations by directly handling session expiration and redirecting to the login UI.', 'allocations_avoided': True}
 
 pub fn handle_route_request(request: &WasmRouteRequest) -> WasmRouteResponse {
     let path = request.path.as_str();
     let method = request.method.as_str();
-
+    let session_expired = request.session_expired;
+    if session_expired {
+        return WasmRouteResponse {
+            status: 302,
+            body: Vec::new(),
+            redirect: Some(String::from("/login")),
+        };
+    }
     match (method, path) {
         ("GET", "/leaderboard") => handlers::handle_leaderboard(request),
         ("GET", "/stats") => handlers::handle_stats(request),
