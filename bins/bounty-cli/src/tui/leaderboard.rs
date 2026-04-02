@@ -110,7 +110,9 @@ fn ui(frame: &mut Frame, app: &App) {
     let title = if let Some(ref err) = app.error {
         format!(" Leaderboard — ERROR: {} ", err)
     } else {
-        format!(" Leaderboard — {} miners ", app.entries.len())
+        let count = app.entries.len();
+        let noun = if count == 1 { "miner" } else { "miners" };
+        format!(" Leaderboard — {} {} ", count, noun)
     };
 
     let table = Table::new(rows, widths)
