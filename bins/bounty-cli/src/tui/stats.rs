@@ -65,7 +65,7 @@ fn stat_block<'a>(label: &'a str, value: u64, color: Color) -> Paragraph<'a> {
     )
 }
 
-fn ui(frame: &mut Frame, stats: &StatsData, error: &Option<String>) {
+fn ui(frame: &mut Frame, stats: &StatsData, error: &Option<String>, initial_render: bool) {
     let outer = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -117,6 +117,10 @@ fn ui(frame: &mut Frame, stats: &StatsData, error: &Option<String>) {
         .style(Style::default().fg(Color::DarkGray))
         .block(Block::default().borders(Borders::ALL));
     frame.render_widget(help, outer[2]);
+
+    if !initial_render {
+        // Call onVisibilityChange handler here if needed
+    }
 }
 
 pub async fn run(rpc_url: &str) -> Result<()> {
@@ -124,6 +128,8 @@ pub async fn run(rpc_url: &str) -> Result<()> {
     let mut stats = StatsData::default();
     let mut error: Option<String> = None;
     let mut last_fetch = Instant::now() - Duration::from_secs(10);
+    let mut initial_render = true;
+    let mut visible = true;
 
     loop {
         if last_fetch.elapsed() >= Duration::from_secs(5) {
@@ -137,7 +143,8 @@ pub async fn run(rpc_url: &str) -> Result<()> {
             last_fetch = Instant::now();
         }
 
-        terminal.draw(|f| ui(f, &stats, &error))?;
+        terminal.draw(|f| ui(f, &stats, &error, initial_render))?;
+        initial_render = false;
 
         if event::poll(Duration::from_millis(100))? {
             if let Event::Key(key) = event::read()? {
@@ -147,6 +154,9 @@ pub async fn run(rpc_url: &str) -> Result<()> {
                     break;
                 }
             }
+        }
+        if visible {
+            // Call onVisibilityChange handler here if needed
         }
     }
 

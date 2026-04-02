@@ -21,6 +21,8 @@ struct App {
     entries: Vec<LeaderboardEntry>,
     scroll_offset: usize,
     error: Option<String>,
+    visibility_changed: bool,
+    initial_visibility_notified: bool,
 }
 
 fn parse_entries(data: &Value) -> Vec<LeaderboardEntry> {
@@ -137,6 +139,8 @@ pub async fn run(rpc_url: &str) -> Result<()> {
         entries: vec![],
         scroll_offset: 0,
         error: None,
+        visibility_changed: false,
+        initial_visibility_notified: false,
     };
 
     let mut last_fetch = Instant::now() - Duration::from_secs(10);
@@ -163,10 +167,12 @@ pub async fn run(rpc_url: &str) -> Result<()> {
                         KeyCode::Char('q') | KeyCode::Esc => break,
                         KeyCode::Up | KeyCode::Char('k') => {
                             app.scroll_offset = app.scroll_offset.saturating_sub(1);
+                            app.visibility_changed = true;
                         }
                         KeyCode::Down | KeyCode::Char('j') => {
                             if app.scroll_offset + 1 < app.entries.len() {
                                 app.scroll_offset += 1;
+                                app.visibility_changed = true;
                             }
                         }
                         _ => {}
@@ -174,8 +180,14 @@ pub async fn run(rpc_url: &str) -> Result<()> {
                 }
             }
         }
+
+        if app.visibility_changed && !app.initial_visibility_notified {
+            app.initial_visibility_notified = true;
+            // Call onVisibilityChange handler here if needed
+        } else if app.visibility_changed {
+            // Call onVisibilityChange handler here if needed
+            app.visibility_changed = false;
+        }
     }
 
-    super::restore_terminal(&mut terminal)?;
-    Ok(())
-}
+    super::restore_terminal(&mut terminal)
