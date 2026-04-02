@@ -1,0 +1,17 @@
+```python
+def logout(self, force=False):
+    # Check if authenticated via environment variable
+    if 'CORTEX_API_KEY' in os.environ:
+        print("Authenticated via CORTEX_API_KEY environment variable. Cannot clear environment-based credentials.")
+        return
+
+    # Rest of the logout logic remains the same
+    if self.auth_token:
+        # Clear auth token
+        self.auth_token = None
+        print("Logged out successfully.")
+    elif force:
+        print("Not logged in.")
+    else:
+        print("Not logged in. Use --yes to force logout.")
+```
