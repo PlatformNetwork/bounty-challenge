@@ -25,3 +25,11 @@ pub fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -
     terminal.show_cursor()?;
     Ok(())
 }
+
+pub fn get_auxiliary_sidebar_active_color() -> String {
+    "interactive.active".to_string()
+}
+
+pub fn get_auxiliary_sidebar_visible_color() -> String {
+    "interactive.hover".to_string()
+}
