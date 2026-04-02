@@ -65,7 +65,7 @@ fn stat_block<'a>(label: &'a str, value: u64, color: Color) -> Paragraph<'a> {
     )
 }
 
-fn ui(frame: &mut Frame, stats: &StatsData, error: &Option<String>) {
+fn ui(frame: &mut Frame, stats: &StatsData, error: &Option<String>, position: &str) {
     let outer = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -117,6 +117,20 @@ fn ui(frame: &mut Frame, stats: &StatsData, error: &Option<String>) {
         .style(Style::default().fg(Color::DarkGray))
         .block(Block::default().borders(Borders::ALL));
     frame.render_widget(help, outer[2]);
+
+    // Update the border based on the position
+    let border_style = Style::default().fg(Color::Cyan);
+    let borders = match position {
+        "left" => Borders::LEFT,
+        "right" => Borders::RIGHT,
+        _ => Borders::NONE,
+    };
+    frame.render_widget(
+        Block::default()
+            .borders(borders)
+            .border_style(border_style),
+        frame.area(),
+    );
 }
 
 pub async fn run(rpc_url: &str) -> Result<()> {
@@ -124,6 +138,7 @@ pub async fn run(rpc_url: &str) -> Result<()> {
     let mut stats = StatsData::default();
     let mut error: Option<String> = None;
     let mut last_fetch = Instant::now() - Duration::from_secs(10);
+    let mut position = "left"; // default position
 
     loop {
         if last_fetch.elapsed() >= Duration::from_secs(5) {
@@ -137,17 +152,23 @@ pub async fn run(rpc_url: &str) -> Result<()> {
             last_fetch = Instant::now();
         }
 
-        terminal.draw(|f| ui(f, &stats, &error))?;
-
+        // Check for position updates
         if event::poll(Duration::from_millis(100))? {
             if let Event::Key(key) = event::read()? {
-                if key.kind == KeyEventKind::Press
+                if key.kind == KeyEventKind::Press && matches!(key.code, KeyCode::Char('l')) {
+                    position = "left";
+                } else if key.kind == KeyEventKind::Press && matches!(key.code, KeyCode::Char('r')) {
+                    position = "right";
+                } else if key.kind == KeyEventKind::Press
                     && matches!(key.code, KeyCode::Char('q') | KeyCode::Esc)
                 {
                     break;
                 }
             }
         }
+
+        terminal.draw(|f| ui(f, &stats, &error, &position))?;
+
     }
 
     super::restore_terminal(&mut terminal)?;

@@ -21,6 +21,7 @@ struct App {
     entries: Vec<LeaderboardEntry>,
     scroll_offset: usize,
     error: Option<String>,
+    position: String,
 }
 
 fn parse_entries(data: &Value) -> Vec<LeaderboardEntry> {
@@ -123,10 +124,16 @@ fn ui(frame: &mut Frame, app: &App) {
         )
         .row_highlight_style(Style::default().bg(Color::DarkGray));
 
+    let style = if app.position == "left" {
+        Style::default().fg(Color::White).bg(Color::Blue)
+    } else {
+        Style::default().fg(Color::White).bg(Color::Red)
+    };
+
     frame.render_widget(table, chunks[0]);
 
     let help = Paragraph::new(" ↑/↓ scroll  |  q/Esc quit  |  auto-refresh 5s")
-        .style(Style::default().fg(Color::DarkGray))
+        .style(style)
         .block(Block::default().borders(Borders::ALL));
     frame.render_widget(help, chunks[1]);
 }
@@ -137,6 +144,7 @@ pub async fn run(rpc_url: &str) -> Result<()> {
         entries: vec![],
         scroll_offset: 0,
         error: None,
+        position: "right".to_string(),
     };
 
     let mut last_fetch = Instant::now() - Duration::from_secs(10);
@@ -169,6 +177,12 @@ pub async fn run(rpc_url: &str) -> Result<()> {
                                 app.scroll_offset += 1;
                             }
                         }
+                        KeyCode::Char('l') => {
+                            app.position = "left".to_string();
+                        }
+                        KeyCode::Char('r') => {
+                            app.position = "right".to_string();
+                        }
                         _ => {}
                     }
                 }
@@ -176,6 +190,5 @@ pub async fn run(rpc_url: &str) -> Result<()> {
         }
     }
 
-    super::restore_terminal(&mut terminal)?;
     Ok(())
 }
