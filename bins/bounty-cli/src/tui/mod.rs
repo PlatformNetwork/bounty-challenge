@@ -25,3 +25,7 @@ pub fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -
     terminal.show_cursor()?;
     Ok(())
 }
+
+pub fn handle_agent_list_remote() -> Result<()> {
+    Err(anyhow::anyhow!("Remote agent registry is not yet implemented."))
+}
