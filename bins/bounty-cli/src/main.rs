@@ -5,6 +5,7 @@ mod views;
 use anyhow::Result;
 use console::style;
 use dialoguer::{Input, Select};
+use structopt::StructOpt;
 
 const DEFAULT_RPC_URL: &str = "https://chain.platform.network";
 
@@ -19,7 +20,18 @@ const MENU_ITEMS: &[&str] = &[
     "Claim Bounty",
     "Change RPC URL",
     "Quit",
+    "Cortex Feedback",
 ];
+
+#[derive(StructOpt)]
+struct CortexFeedback {
+    #[structopt(short = "s", long = "session")]
+    session: Option<String>,
+    #[structopt(short = "b", long = "bug")]
+    bug: Option<String>,
+    #[structopt(short = "m", long = "message")]
+    message: String,
+}
 
 fn print_header(rpc_url: &str) {
     println!();
@@ -69,7 +81,19 @@ async fn main() -> Result<()> {
                 );
                 Ok(())
             }
-            9 => break,
+            9 => {
+                let feedback = CortexFeedback::from_args();
+                let mut file_path = std::path::PathBuf::from("~/.cortex/feedback");
+                file_path.push(format!("{}.json", chrono::Utc::now().timestamp()));
+                let mut file = std::fs::File::create(file_path)?;
+                let json = serde_json::json!({
+                    "session_id": feedback.session.unwrap_or_default(),
+                    "message": feedback.message,
+                });
+                serde_json::to_writer_pretty(&mut file, &json)?;
+                Ok(())
+            }
+            10 => break,
             _ => break,
         };
 

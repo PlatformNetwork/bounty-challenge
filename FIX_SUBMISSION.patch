@@ -1,0 +1,30 @@
+```python
+import argparse
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('type', choices=['bug', 'feature'])
+    parser.add_argument('message', nargs='+')
+    parser.add_argument('--session', help='session ID')
+    return parser.parse_args()
+
+def save_feedback(args):
+    message = ' '.join(args.message)
+    if args.session:
+        # Save feedback with session ID
+        feedback = {'type': args.type, 'message': message, 'session_id': args.session}
+    else:
+        # Save feedback without session ID
+        feedback = {'type': args.type, 'message': message}
+    # Save feedback to file
+    with open('~/.cortex/feedback/feedback.json', 'w') as f:
+        import json
+        json.dump(feedback, f)
+
+def main():
+    args = parse_args()
+    save_feedback(args)
+
+if __name__ == '__main__':
+    main()
+```
