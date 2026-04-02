@@ -85,3 +85,23 @@ async fn main() -> Result<()> {
     println!("{}", style("Goodbye!").dim());
     Ok(())
 }
+let args: Vec<String> = env::args().collect();
+let mut session_id = None;
+let mut description = None;
+for arg in args.iter().skip(2) {
+    if arg.starts_with("--session") {
+        session_id = Some(arg.trim_start_matches("--session "));
+    } else {
+        description = Some(arg.clone());
+    }
+}
+if let Some(session_id) = session_id {
+    // Use the session_id variable
+} else {
+    // Handle the case where --session is not provided
+}
+if let Some(description) = description {
+    // Use the description variable
+} else {
+    // Handle the case where description is not provided
+}
