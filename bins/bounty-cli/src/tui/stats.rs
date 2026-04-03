@@ -46,6 +46,8 @@ fn parse_stats(data: &Value) -> StatsData {
     }
 }
 
+const ICON_SIZE: u16 = 14;
+
 fn stat_block<'a>(label: &'a str, value: u64, color: Color) -> Paragraph<'a> {
     let text = vec![
         Line::from(Span::styled(

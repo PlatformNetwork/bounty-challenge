@@ -23,6 +23,8 @@ struct App {
     error: Option<String>,
 }
 
+const ICON_SIZE: u16 = 14;
+
 fn parse_entries(data: &Value) -> Vec<LeaderboardEntry> {
     let body = data.get("body").unwrap_or(data);
     let arr = match body.as_array() {
