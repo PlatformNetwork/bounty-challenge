@@ -21,6 +21,8 @@ struct App {
     entries: Vec<LeaderboardEntry>,
     scroll_offset: usize,
     error: Option<String>,
+    is_resizing: bool,
+    last_mouse_position: (u16, u16),
 }
 
 fn parse_entries(data: &Value) -> Vec<LeaderboardEntry> {
@@ -121,7 +123,11 @@ fn ui(frame: &mut Frame, app: &App) {
                 .border_style(Style::default().fg(Color::Cyan))
                 .title(title),
         )
-        .row_highlight_style(Style::default().bg(Color::DarkGray));
+        .row_highlight_style(Style::default().bg(if app.is_resizing {
+            Color::DarkGray
+        } else {
+            Color::DarkGray
+        }));
 
     frame.render_widget(table, chunks[0]);
 
@@ -137,6 +143,8 @@ pub async fn run(rpc_url: &str) -> Result<()> {
         entries: vec![],
         scroll_offset: 0,
         error: None,
+        is_resizing: false,
+        last_mouse_position: (0, 0),
     };
 
     let mut last_fetch = Instant::now() - Duration::from_secs(10);
@@ -172,10 +180,16 @@ pub async fn run(rpc_url: &str) -> Result<()> {
                         _ => {}
                     }
                 }
+            } else if let Event::Mouse(mouse) = event::read()? {
+                if mouse.kind == event::MouseEventKind::Down {
+                    app.is_resizing = true;
+                } else if mouse.kind == event::MouseEventKind::Up {
+                    app.is_resizing = false;
+                } else if mouse.kind == event::MouseEventKind::Moved {
+                    app.last_mouse_position = (mouse.column, mouse.row);
+                }
             }
         }
     }
-
-    super::restore_terminal(&mut terminal)?;
     Ok(())
 }
