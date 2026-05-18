@@ -2,7 +2,7 @@
 
 # bουηtү chαllεηgε
 
-**Manual project bounty challenge for Platform Network**
+**Incentivizing miners to complete project tasks and deliver the best final project outcome**
 
 ![Bounty Challenge Banner](assets/banner.jpg)
 
@@ -10,9 +10,10 @@
 
 ## Overview
 
-Bounty Challenge is a Python/FastAPI challenge service for Platform Network. Admins create
-project bounties, miners submit GitHub links for their work, and the owner manually reviews
-submissions and sets final reward emissions.
+Bounty Challenge is a Python/FastAPI challenge service for Platform Network that incentivizes
+miners to complete project tasks and compete for the best final rendering of a requested project.
+Admins create project bounties, miners submit GitHub links for their work, and the owner manually
+reviews submissions and sets final reward emissions.
 
 This version does not auto-score GitHub issues. It is designed for subjective work such as:
 

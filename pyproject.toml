@@ -1,7 +1,7 @@
 [project]
 name = "bounty-challenge"
 version = "0.1.0"
-description = "Manual bounty challenge service for Platform Network"
+description = "Incentivizes miners to complete project tasks and deliver the best final project outcome"
 requires-python = ">=3.12"
 dependencies = [
   "aiosqlite>=0.20.0",
