@@ -1,24 +1,12 @@
-# Build artifacts
-/target/
-**/target/
-**/*.rs.bk
-
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo
-*~
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Environment
-.env
-.env.local
-*.env
-
-# Logs
-*.log
-logs/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+dist/
+build/
+*.egg-info/
+*.sqlite3
+data/
+target/
