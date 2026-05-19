@@ -95,3 +95,7 @@ bounty-challenge/
 ├── src/bounty_challenge/
 └── tests/
 ```
+
+## License
+
+Apache-2.0
